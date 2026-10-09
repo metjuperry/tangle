@@ -1,0 +1,17 @@
+<Solution>
+  <Folder Name="/src/">
+    <Project Path="src/Tangle.Ai/Tangle.Ai.csproj" />
+    <Project Path="src/Tangle.Core/Tangle.Core.csproj" />
+    <Project Path="src/Tangle.Data/Tangle.Data.csproj" />
+    <Project Path="src/Tangle.GitHub/Tangle.GitHub.csproj" />
+    <Project Path="src/Tangle.Host/Tangle.Host.csproj" />
+    <Project Path="src/Tangle.Mcp/Tangle.Mcp.csproj" />
+    <Project Path="src/Tangle.Sessions/Tangle.Sessions.csproj" />
+    <Project Path="src/Tangle.Web/Tangle.Web.csproj" />
+  </Folder>
+  <Folder Name="/tests/">
+    <Project Path="tests/Tangle.Ai.Evals/Tangle.Ai.Evals.csproj" />
+    <Project Path="tests/Tangle.Core.Tests/Tangle.Core.Tests.csproj" />
+    <Project Path="tests/Tangle.Web.Tests/Tangle.Web.Tests.csproj" />
+  </Folder>
+</Solution>

@@ -1,0 +1,7 @@
+header { display: flex; align-items: center; gap: 24px; padding: 16px 24px; background: #221c15; color: #fbf6ea; }
+header strong { font-size: 28px; }
+main { padding: 48px 24px; }
+section { padding: 24px; background: #fbf6ea; max-width: 600px; box-shadow: 0 4px 12px #221c1540; }
+label { display: grid; gap: 8px; }
+input, button { font: inherit; padding: 10px; margin-top: 8px; }
+button { cursor: pointer; }

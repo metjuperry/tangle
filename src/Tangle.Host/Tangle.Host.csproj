@@ -1,0 +1,19 @@
+﻿<Project Sdk="Microsoft.NET.Sdk.Web">
+
+  <ItemGroup>
+    <ProjectReference Include="..\Tangle.Web\Tangle.Web.csproj" />
+    <ProjectReference Include="..\Tangle.Data\Tangle.Data.csproj" />
+    <ProjectReference Include="..\Tangle.GitHub\Tangle.GitHub.csproj" />
+    <ProjectReference Include="..\Tangle.Sessions\Tangle.Sessions.csproj" />
+    <ProjectReference Include="..\Tangle.Ai\Tangle.Ai.csproj" />
+    <ProjectReference Include="..\Tangle.Mcp\Tangle.Mcp.csproj" />
+  </ItemGroup>
+
+  <PropertyGroup>
+    <TargetFramework>net10.0</TargetFramework>
+    <Nullable>enable</Nullable>
+    <ImplicitUsings>enable</ImplicitUsings>
+    <UserSecretsId>160329a0-0dd5-4b46-a0f8-fde9fc879060</UserSecretsId>
+  </PropertyGroup>
+
+</Project>
