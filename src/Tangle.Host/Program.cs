@@ -1,6 +1,7 @@
 using Tangle.Core;
 using Tangle.Data;
 using Tangle.Web;
+using Tangle.GitHub;
 
 var builder = WebApplication.CreateBuilder(args);
 builder.WebHost.UseUrls(builder.Configuration["Tangle:Address"] ?? new RuntimeSettings().Address);
@@ -17,11 +18,18 @@ builder.Services.AddSingleton(services =>
 });
 builder.Services.AddSingleton(services => new Database(services.GetRequiredService<RuntimeSettings>().DatabasePath));
 builder.Services.AddLocalAuthentication();
+builder.Services.AddSingleton<TimeProvider>(TimeProvider.System);
+builder.Services.AddSingleton<SyncStore>();
+builder.Services.AddSingleton<ISyncStore>(services => services.GetRequiredService<SyncStore>());
+builder.Services.AddSingleton<GitHubTokens>();
+builder.Services.AddHttpClient<IGitHubReader, GitHubReader>();
+builder.Services.AddSingleton<SyncService>();
 var app = builder.Build();
 var applied = await app.Services.GetRequiredService<Database>().MigrateAsync();
 app.Logger.LogInformation("Applied {Count} database migrations", applied);
 app.UseLocalAuthentication(app.Services.GetRequiredService<RuntimeSettings>());
 app.MapGet("/healthz", () => Results.Ok(new { status = "ok" }));
+app.MapSyncEndpoints();
 app.MapWebShell();
 app.Run();
 

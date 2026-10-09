@@ -1,0 +1,11 @@
+{
+  Id: example/repo#49,
+  Title: Example pull request,
+  Author: viewer,
+  State: OPEN,
+  IsDraft: false,
+  ChangedFiles: 8,
+  Files: 8,
+  Events: 4,
+  Threads: 4
+}
