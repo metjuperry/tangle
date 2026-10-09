@@ -27,7 +27,7 @@ public sealed class SyncTests : IDisposable
             state == "OPEN" ? null : "2026-10-09T00:00:00Z", 10, 2, 1, "MERGEABLE", null, "SUCCESS",
             ["src/file.cs"], [new("2026-10-09T00:00:00Z", "viewer", "comment", "{\"body\":\"hello\"}")],
             [new($"thread-{number}", "src/file.cs", false, "reviewer", "2026-10-09T00:00:00Z", "Please fix")],
-            [new("reviewer", "User")], hash);
+            [new("reviewer", "User")], hash, "viewer");
     private static PrPage Page(IReadOnlyList<PullRequest> prs, bool more = false, string? cursor = null) =>
         new(prs, more, cursor, 1, 4999, "2026-10-10T00:00:00Z");
 
@@ -139,6 +139,64 @@ public sealed class SyncTests : IDisposable
         Assert.Empty(await store.GetBoardAsync());
         await store.SaveSettingsAsync(current);
         Assert.Single(await store.GetBoardAsync());
+    }
+
+    [Fact]
+    public async Task FactsAndRuleStringsAreAtomicAndCutsSurviveChangedSync()
+    {
+        await Initialize();
+        var prs = new[] { Pr() with { Body = "#2" }, Pr(2) with { HeadRef = "other" } };
+        await store.SaveScopeAsync("scope", prs, "cursor", default);
+        var cards = await store.GetBoardAsync();
+        Assert.All(cards, c => Assert.NotNull(c.Facts));
+        var link = Assert.Single(await store.GetStringsAsync());
+        Assert.Equal("explicit", link.Rule);
+        await using var db = await database.OpenAsync();
+        var created = await db.ExecuteScalarAsync<string>("SELECT created_at FROM link");
+        await store.SaveScopeAsync("scope", prs, "next", default);
+        Assert.Equal(created, await db.ExecuteScalarAsync<string>("SELECT created_at FROM link"));
+        await db.ExecuteAsync("UPDATE link SET status='cut',decided_at='now',label='do not resurrect'");
+        await store.SaveScopeAsync("scope", [prs[0] with { ContentHash = "changed" }, prs[1]], "next", default);
+        Assert.Empty(await store.GetStringsAsync());
+        Assert.Equal("cut", await db.ExecuteScalarAsync<string>("SELECT status FROM link"));
+        Assert.Equal("do not resurrect", await db.ExecuteScalarAsync<string>("SELECT label FROM link"));
+    }
+
+    [Fact]
+    public async Task InvalidFactInputRollsBackCacheAndCursor()
+    {
+        await Initialize();
+        await Assert.ThrowsAsync<FormatException>(() => store.SaveScopeAsync("scope",
+            [Pr() with { CreatedAt = "invalid" }], "cursor", default));
+        Assert.Empty(await store.GetBoardAsync());
+        Assert.Null(await store.GetCursorAsync("scope", default));
+    }
+
+    [Fact]
+    public async Task BotSettingRecomputesExistingFactsWithoutNetwork()
+    {
+        await Initialize();
+        var pr = Pr() with { Threads = [], Events = [
+            new("2026-10-09T12:00:00Z", "custom-bot", "comment", """{"body":"automated"}""")
+        ] };
+        var fixedStore = new SyncStore(database, new FixedClock());
+        await fixedStore.SaveScopeAsync("scope", [pr], "cursor", default);
+        Assert.Equal(0, (await fixedStore.GetBoardAsync()).Single().Facts!.IdleDays);
+        var settings = await fixedStore.GetSettingsAsync();
+        await fixedStore.SaveSettingsAsync(settings with { BotLogins = [..settings.BotLogins, "custom-bot"] });
+        Assert.Equal(8, (await fixedStore.GetBoardAsync()).Single().Facts!.IdleDays);
+    }
+
+    [Fact]
+    public async Task OldM1ViewerIdentityIsRecoveredWithoutRewritingUserData()
+    {
+        await Initialize();
+        var pr = Pr() with { IsMine = false, Author = "other", Viewer = "", Threads = [],
+            ReviewRequests = [new("viewer", "User")] };
+        await store.SaveScopeAsync("involves:viewer org:example", [pr], "cursor", default);
+        Assert.Equal("your review is requested", (await store.GetBoardAsync()).Single().Facts!.TurnReason);
+        await store.RecomputeAsync();
+        Assert.Equal("me", (await store.GetBoardAsync()).Single().Facts!.Turn);
     }
     public void Dispose()
     {

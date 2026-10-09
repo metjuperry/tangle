@@ -8,10 +8,22 @@ public sealed record RepoSetting(string Id, bool Watched = true, bool AiAllowed 
 {
     public RepoSetting() : this("") { }
 }
-public sealed record WatchedSettings(IReadOnlyList<OwnerSetting> Owners, IReadOnlyList<RepoSetting> Repos);
-public sealed record PrEvent(string At, string? Actor, string Kind, string Detail);
-public sealed record ReviewThread(string Id, string? Path, bool IsResolved, string? LastActor, string? LastAt, string? Excerpt);
-public sealed record ReviewRequest(string Reviewer, string Kind);
+public sealed record WatchedSettings(IReadOnlyList<OwnerSetting> Owners, IReadOnlyList<RepoSetting> Repos)
+{
+    public IReadOnlyList<string> BotLogins { get; init; } = ["dependabot", "dependabot[bot]", "github-actions", "github-actions[bot]"];
+}
+public sealed record PrEvent(string At, string? Actor, string Kind, string Detail)
+{
+    public PrEvent() : this("", null, "", "") { }
+}
+public sealed record ReviewThread(string Id, string? Path, bool IsResolved, string? LastActor, string? LastAt, string? Excerpt)
+{
+    public ReviewThread() : this("", null, false, null, null, null) { }
+}
+public sealed record ReviewRequest(string Reviewer, string Kind)
+{
+    public ReviewRequest() : this("", "") { }
+}
 
 public sealed record PullRequest(
     string Id, string RepoId, int Number, string Title, string Body, string? Author, bool IsMine,
@@ -19,7 +31,11 @@ public sealed record PullRequest(
     string? ClosedAt, int Additions, int Deletions, int ChangedFiles, string Mergeable,
     string? ReviewDecision, string? ChecksState, IReadOnlyList<string> Files,
     IReadOnlyList<PrEvent> Events, IReadOnlyList<ReviewThread> Threads, IReadOnlyList<ReviewRequest> ReviewRequests,
-    string ContentHash);
+    string ContentHash, string Viewer = "")
+{
+    public PullRequest() : this("", "", 0, "", "", null, false, "", false, "", "", "", "",
+        null, 0, 0, 0, "", null, null, [], [], [], [], "") { }
+}
 
 public sealed record PrPage(IReadOnlyList<PullRequest> Prs, bool HasNextPage, string? EndCursor,
     int Cost, int Remaining, string ResetAt, int CallCount = 1);

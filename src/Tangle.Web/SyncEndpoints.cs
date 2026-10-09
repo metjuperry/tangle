@@ -21,6 +21,7 @@ public static partial class SyncEndpoints
         api.MapPut("/settings", async (WatchedSettings input, ISyncStore store, CancellationToken ct) =>
         {
             if (input.Owners is null || input.Repos is null ||
+                input.BotLogins is null || input.BotLogins.Any(b => string.IsNullOrWhiteSpace(b) || b.Length > 100 || b.Any(char.IsWhiteSpace)) ||
                 input.Owners.Any(o => o is null || !OwnerName().IsMatch(o.Id ?? "") || o.Kind is not ("org" or "user")) ||
                 input.Repos.Any(r => r is null || !RepoName().IsMatch(r.Id ?? "")) ||
                 input.Owners.Select(o => o.Id).Distinct(StringComparer.OrdinalIgnoreCase).Count() != input.Owners.Count ||
@@ -45,7 +46,9 @@ public static partial class SyncEndpoints
         {
             var cards = await store.GetBoardAsync(ct: ct);
             return Results.Ok(new { zones = cards.Select(c => c.RepoId).Distinct(), cards,
-                stickies = Array.Empty<object>(), strings = Array.Empty<object>(), positions = Array.Empty<object>() });
+                batches = cards.Where(c => c.BatchId is not null).GroupBy(c => c.BatchId)
+                    .Select(g => new { id = g.Key, repoId = g.First().RepoId, prIds = g.Select(c => c.Id) }),
+                stickies = Array.Empty<object>(), strings = await store.GetStringsAsync(ct), positions = Array.Empty<object>() });
         });
         api.MapGet("/debug/prs", async (SyncStore store, CancellationToken ct) =>
             Results.Ok(await store.GetBoardAsync(includeClosed: true, ct: ct)));

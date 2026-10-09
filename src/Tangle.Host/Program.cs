@@ -27,6 +27,7 @@ builder.Services.AddSingleton<SyncService>();
 var app = builder.Build();
 var applied = await app.Services.GetRequiredService<Database>().MigrateAsync();
 app.Logger.LogInformation("Applied {Count} database migrations", applied);
+await app.Services.GetRequiredService<SyncStore>().RecomputeAsync();
 app.UseLocalAuthentication(app.Services.GetRequiredService<RuntimeSettings>());
 app.MapGet("/healthz", () => Results.Ok(new { status = "ok" }));
 app.MapSyncEndpoints();

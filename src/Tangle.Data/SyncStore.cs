@@ -1,9 +1,10 @@
 using Dapper;
+using System.Text.Json;
 using Tangle.Core;
 
 namespace Tangle.Data;
 
-public sealed class SyncStore(Database database) : ISyncStore
+public sealed partial class SyncStore(Database database, TimeProvider? clock = null) : ISyncStore
 {
     public async Task<WatchedSettings> GetSettingsAsync(CancellationToken ct = default)
     {
@@ -12,7 +13,12 @@ public sealed class SyncStore(Database database) : ISyncStore
             "SELECT id AS Id, kind AS Kind, watched AS Watched FROM organization ORDER BY id", cancellationToken: ct));
         var repos = await db.QueryAsync<RepoSetting>(new CommandDefinition(
             "SELECT id AS Id, watched AS Watched, ai_allowed AS AiAllowed FROM repo ORDER BY id", cancellationToken: ct));
-        return new(owners.ToArray(), repos.ToArray());
+        var bots = await db.QuerySingleAsync<string>(new CommandDefinition(
+            "SELECT value FROM app_setting WHERE key='bot_logins'", cancellationToken: ct));
+        return new(owners.ToArray(), repos.ToArray())
+        {
+            BotLogins = JsonSerializer.Deserialize<string[]>(bots) ?? throw new InvalidOperationException("Bot logins setting is invalid.")
+        };
     }
 
     public async Task SaveSettingsAsync(WatchedSettings settings, CancellationToken ct = default)
@@ -32,8 +38,11 @@ public sealed class SyncStore(Database database) : ISyncStore
             await db.ExecuteAsync(new CommandDefinition(
                 "INSERT INTO repo(id,watched,ai_allowed) VALUES (@Id,@Watched,0) ON CONFLICT(id) DO UPDATE SET watched=excluded.watched",
                 repo, tx, cancellationToken: ct));
+        await db.ExecuteAsync(new CommandDefinition("UPDATE app_setting SET value=@value WHERE key='bot_logins'",
+            new { value = JsonSerializer.Serialize(settings.BotLogins) }, tx, cancellationToken: ct));
         if (changed)
             await db.ExecuteAsync(new CommandDefinition("DELETE FROM sync_state", transaction: tx, cancellationToken: ct));
+        await ComputeCacheAsync(db, tx, ct);
         tx.Commit();
     }
 
@@ -58,16 +67,16 @@ public sealed class SyncStore(Database database) : ISyncStore
             if (hash == pr.ContentHash) continue;
             await db.ExecuteAsync(new CommandDefinition("""
                 INSERT INTO pr(id,repo_id,number,title,body,author,is_mine,state,is_draft,head_ref,base_ref,
-                  created_at,updated_at,closed_at,additions,deletions,changed_files,mergeable,review_decision,checks_state,content_hash)
+                  created_at,updated_at,closed_at,additions,deletions,changed_files,mergeable,review_decision,checks_state,content_hash,viewer)
                 VALUES(@Id,@RepoId,@Number,@Title,@Body,@Author,@IsMine,@State,@IsDraft,@HeadRef,@BaseRef,
-                  @CreatedAt,@UpdatedAt,@ClosedAt,@Additions,@Deletions,@ChangedFiles,@Mergeable,@ReviewDecision,@ChecksState,@ContentHash)
+                  @CreatedAt,@UpdatedAt,@ClosedAt,@Additions,@Deletions,@ChangedFiles,@Mergeable,@ReviewDecision,@ChecksState,@ContentHash,@Viewer)
                 ON CONFLICT(id) DO UPDATE SET repo_id=excluded.repo_id,number=excluded.number,title=excluded.title,
                   body=excluded.body,author=excluded.author,is_mine=excluded.is_mine,state=excluded.state,
                   is_draft=excluded.is_draft,head_ref=excluded.head_ref,base_ref=excluded.base_ref,
                   created_at=excluded.created_at,updated_at=excluded.updated_at,closed_at=excluded.closed_at,
                   additions=excluded.additions,deletions=excluded.deletions,changed_files=excluded.changed_files,
                   mergeable=excluded.mergeable,review_decision=excluded.review_decision,
-                  checks_state=excluded.checks_state,content_hash=excluded.content_hash
+                  checks_state=excluded.checks_state,content_hash=excluded.content_hash,viewer=excluded.viewer
                 """, pr, tx, cancellationToken: ct));
             await db.ExecuteAsync(new CommandDefinition("""
                 DELETE FROM pr_file WHERE pr_id=@Id;
@@ -93,6 +102,7 @@ public sealed class SyncStore(Database database) : ISyncStore
             INSERT INTO sync_state(scope,cursor,last_run_at) VALUES(@scope,@cursor,@cursor)
             ON CONFLICT(scope) DO UPDATE SET cursor=excluded.cursor,last_run_at=excluded.last_run_at
             """, new { scope, cursor }, tx, cancellationToken: ct));
+        await ComputeCacheAsync(db, tx, ct);
         tx.Commit();
         return count;
     }
@@ -103,7 +113,7 @@ public sealed class SyncStore(Database database) : ISyncStore
         var rows = await db.QueryAsync<BoardCard>(new CommandDefinition("""
             SELECT p.id AS Id, p.repo_id AS RepoId, p.number AS Number, p.title AS Title, p.author AS Author,
               p.is_mine AS IsMine, p.state AS State, p.is_draft AS IsDraft, p.updated_at AS UpdatedAt,
-              p.created_at AS CreatedAt, p.content_hash AS ContentHash
+              p.created_at AS CreatedAt, p.content_hash AS ContentHash, p.batch_id AS BatchId
             FROM pr p JOIN repo r ON r.id=p.repo_id
             WHERE (@includeClosed=1 OR p.state='OPEN') AND r.watched=1
               AND NOT EXISTS (
@@ -112,7 +122,9 @@ public sealed class SyncStore(Database database) : ISyncStore
               )
             ORDER BY p.repo_id,p.number
             """, new { includeClosed }, cancellationToken: ct));
-        return rows.ToArray();
+        var facts = (await db.QueryAsync<PrFacts>(new CommandDefinition(FactSelect, cancellationToken: ct)))
+            .ToDictionary(f => f.PrId);
+        return rows.Select(r => r with { Facts = facts.GetValueOrDefault(r.Id) }).ToArray();
     }
 }
 
@@ -120,4 +132,6 @@ public sealed record BoardCard(string Id, string RepoId, long Number, string Tit
     bool IsMine, string State, bool IsDraft, string UpdatedAt, string CreatedAt, string ContentHash)
 {
     public BoardCard() : this("", "", 0, "", null, false, "", false, "", "", "") { }
+    public PrFacts? Facts { get; init; }
+    public string? BatchId { get; init; }
 }

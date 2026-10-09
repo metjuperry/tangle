@@ -1,0 +1,13 @@
+[
+  {
+    PrId: example/repo#49,
+    Turn: me,
+    TurnReason: 4 open review comments,
+    AgeDays: 14,
+    IdleDays: 7,
+    Conflicting: false,
+    Size: M,
+    Origin: human,
+    ComputedAt: DateTimeOffset_1
+  }
+]

@@ -219,7 +219,7 @@ public sealed class GitHubReader(HttpClient http, GitHubTokens tokens, ILogger<G
             Text("headRefName"), Text("baseRefName"), Text("createdAt"), Text("updatedAt"), node["closedAt"]?.GetValue<string>(),
             node["additions"]!.GetValue<int>(), node["deletions"]!.GetValue<int>(), node["changedFiles"]!.GetValue<int>(),
             Text("mergeable"), node["reviewDecision"]?.GetValue<string>(), checks, files,
-            events.OrderBy(e => e.At).ThenBy(e => e.Kind).ThenBy(e => e.Actor).ThenBy(e => e.Detail).ToArray(), threads, reviewers, "");
+            events.OrderBy(e => e.At).ThenBy(e => e.Kind).ThenBy(e => e.Actor).ThenBy(e => e.Detail).ToArray(), threads, reviewers, "", viewer);
         return pr with { ContentHash = Convert.ToHexString(SHA256.HashData(Encoding.UTF8.GetBytes(JsonSerializer.Serialize(pr)))) };
     }
 }

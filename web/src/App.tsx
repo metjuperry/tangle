@@ -4,9 +4,10 @@ import './App.css'
 
 type Owner = { id: string; kind: 'org' | 'user'; watched: boolean }
 type Repo = { id: string; watched: boolean; aiAllowed: boolean }
-type Settings = { owners: Owner[]; repos: Repo[] }
-type Card = { id: string; repoId: string; number: number; title: string; author: string | null; isMine: boolean; state: string; isDraft: boolean; updatedAt: string }
-type Board = { cards: Card[] }
+type Settings = { owners: Owner[]; repos: Repo[]; botLogins: string[] }
+type Facts = { turn: string; turnReason: string; ageDays: number; idleDays: number; behindBy: number | null; conflicting: boolean; size: string; origin: string }
+type Card = { id: string; repoId: string; number: number; title: string; author: string | null; isMine: boolean; state: string; isDraft: boolean; updatedAt: string; facts: Facts | null; batchId: string | null }
+type Board = { cards: Card[]; strings: { id: string; aRef: string; bRef: string; rule: string; reason: string }[] }
 type SyncResult = { fetched: number; changed: number; calls: number; cost: number }
 const queries = new QueryClient()
 async function api<T>(path: string, init?: RequestInit): Promise<T> {
@@ -49,13 +50,17 @@ function SettingsPage() {
       <label>Repository (owner/repo)<input value={repo} onChange={e => setRepo(e.target.value)} required /></label><button>Add repository</button>
     </form>
     <button disabled={save.isPending} onClick={() => save.mutate(value)}>Save settings</button>
+    <label>Bot logins (comma-separated)<input value={value.botLogins.join(', ')}
+      onChange={e => setDraft({ ...value, botLogins: e.target.value.split(',').map(s => s.trim()).filter(Boolean) })} /></label>
     {save.error && <p role="alert">{save.error.message}</p>}{save.isSuccess && <p role="status">Settings saved.</p>}
   </section>
 }
 function PrTable({ cards }: { cards: Card[] }) {
-  return <table><thead><tr><th>PR</th><th>Title</th><th>Author</th><th>State</th><th>Updated</th></tr></thead>
+  return <table><thead><tr><th>PR</th><th>Title</th><th>Author</th><th>State</th><th>Turn</th><th>Reason</th><th>Age / idle days</th><th>Size / origin</th><th>Batch</th><th>Updated</th></tr></thead>
     <tbody>{cards.map(c => <tr key={c.id}><td><a href={`https://github.com/${c.repoId}/pull/${c.number}`} rel="noreferrer" target="_blank">{c.id}</a></td>
-      <td>{c.title}{c.isDraft && ' (draft)'}</td><td>{c.author}{c.isMine && ' (you)'}</td><td>{c.state}</td><td>{c.updatedAt}</td></tr>)}</tbody></table>
+      <td>{c.title}{c.isDraft && ' (draft)'}</td><td>{c.author}{c.isMine && ' (you)'}</td><td>{c.state}</td>
+      <td>{c.facts?.turn ?? 'not computed'}</td><td>{c.facts?.turnReason}</td><td>{c.facts && `${c.facts.ageDays} / ${c.facts.idleDays}`}</td>
+      <td>{c.facts && `${c.facts.size} / ${c.facts.origin}`}</td><td>{c.batchId ? c.batchId.slice(0, 18) : '—'}</td><td>{c.updatedAt}</td></tr>)}</tbody></table>
 }
 function Workspace() {
   const queryClient = useQueryClient()
@@ -72,6 +77,8 @@ function Workspace() {
       <p>The React Flow board arrives in M3. This milestone shows synced data as a plain table.</p>
       {(board.error ?? debug.error) && <p role="alert">{(board.error ?? debug.error)?.message}</p>}
       {board.isPending ? <p>Loading pull requests…</p> : board.data?.cards.length === 0 ? <p>No pull requests synced yet.</p> : <PrTable cards={path === '/debug/prs' ? debug.data ?? [] : board.data?.cards ?? []} />}
+      <h2>Rule strings</h2>{board.data?.strings.length === 0 ? <p>No rule strings found.</p> :
+        <ul>{board.data?.strings.map(s => <li key={s.id}>{s.aRef} ↔ {s.bRef}: {s.rule} — {s.reason}</li>)}</ul>}
     </section>}</>
 }
 function Shell() {
