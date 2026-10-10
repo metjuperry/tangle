@@ -44,7 +44,9 @@ The browser fixture host uses a fresh SQLite database, recorded #49 review data,
 
 Browser coverage proves zones/cards/batch/yarn, opening four review asks, live refresh following an independent API sync, one stale-open sync and no fresh-open sync, dimming and viewport pan/zoom, Settings persistence and removal of the debug route. API tests cover card context, authentication, event replay, expired/future IDs and heartbeat. Visual capture is generated at 1640×1200, the prototype's reference width.
 
-Final real-data inspection and GitHub CI status are reported with the milestone handoff. Local tests are not described as remote CI.
+The isolated existing real cache rendered 17 cards across six zones, and alm-lab #49 opened four review asks. No working SQLite file was touched. Local validation passed 66 .NET tests and six browser tests.
+
+M3 is [PR #4](https://github.com/metjuperry/tangle/pull/4), based on M2. Earlier milestones are [M0 #1](https://github.com/metjuperry/tangle/pull/1), [M1 #2](https://github.com/metjuperry/tangle/pull/2), and [M2 #3](https://github.com/metjuperry/tangle/pull/3). All remain unmerged. GitHub reports Actions enabled but initially no workflow runs or checks for the published branches; **remote CI is not yet verified**. Local tests are not described as remote CI.
 
 ## Deliberate scope limits and decisions
 
