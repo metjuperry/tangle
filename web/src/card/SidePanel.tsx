@@ -5,8 +5,11 @@ import { Notes, StickyEditor, StringEditor } from './AuthoringPanel'
 import { findStacks } from '../board/stacks'
 import { useMutation, useQueryClient } from '@tanstack/react-query'
 import { write } from '../api/client'
+import { ActionComposer } from '../deck/Receipt'
+import { useState } from 'react'
 
 export function SidePanel({ board }: { board: Board }) {
+  const [queueAction, setQueueAction] = useState(false)
   const selected = useBoardUi(s => s.selection)
   const stringId = useBoardUi(s => s.stringId)
   const select = useBoardUi(s => s.select)
@@ -30,6 +33,8 @@ export function SidePanel({ board }: { board: Board }) {
       <h2>{card.title}</h2><div className="chips"><span className={`turn-chip turn-${card.facts?.turn}`}><i />{turnLabel(card.facts?.turn)}</span>
         {card.facts?.origin === 'agent' && <span className="turn-chip">Agent-authored</span>}</div>
       <button onClick={() => startTie(`pr:${card.id}`)}>Tie a string</button>
+      <button onClick={() => setQueueAction(true)}>Queue a GitHub action</button>
+      {queueAction && <ActionComposer prId={card.id} onClose={() => setQueueAction(false)} />}
       {separated && <div><button disabled={regroup.isPending} onClick={() => regroup.mutate()}>Group stack again</button>
         <p className="quiet">Restores this stack’s automatic layout; notes and strings stay intact.</p>
         {regroup.error && <p role="alert">{regroup.error.message}</p>}</div>}

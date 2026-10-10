@@ -23,6 +23,7 @@ builder.Services.AddLocalAuthentication();
 builder.Services.AddSingleton<TimeProvider>(TimeProvider.System);
 builder.Services.AddSingleton<SyncStore>();
 builder.Services.AddSingleton<AuthoringStore>();
+builder.Services.AddSingleton<ActionStore>();
 builder.Services.AddSingleton<IAiStore, AiStore>();
 builder.Services.AddSingleton(services =>
 {
@@ -40,6 +41,7 @@ builder.Services.AddHostedService(s => s.GetRequiredService<AiWorker>());
 builder.Services.AddSingleton<ISyncStore>(services => services.GetRequiredService<SyncStore>());
 builder.Services.AddSingleton<GitHubTokens>();
 builder.Services.AddHttpClient<IGitHubReader, GitHubReader>();
+builder.Services.AddHttpClient<IGitHubActions, GitHubActions>();
 builder.Services.AddSingleton<SyncService>();
 builder.Services.AddSingleton<EventHub>();
 builder.Services.AddSingleton<ILiveEvents>(services => services.GetRequiredService<EventHub>());
@@ -51,6 +53,7 @@ app.UseLocalAuthentication(app.Services.GetRequiredService<RuntimeSettings>());
 app.MapGet("/healthz", () => Results.Ok(new { status = "ok" }));
 app.MapSyncEndpoints();
 app.MapAuthoringEndpoints();
+app.MapActionEndpoints();
 app.MapWebShell();
 app.Run();
 

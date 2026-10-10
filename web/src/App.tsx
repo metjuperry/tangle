@@ -1,4 +1,4 @@
-import { useEffect, useRef, useState } from 'react'
+import { lazy, Suspense, useEffect, useRef, useState } from 'react'
 import { QueryClient, QueryClientProvider, useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 import './App.css'
 import { api, type Board } from './api/client'
@@ -7,6 +7,8 @@ import { SidePanel } from './card/SidePanel'
 import { useBoardUi } from './board/store'
 import { useLiveEvents } from './api/events'
 import { NewSticky } from './card/AuthoringPanel'
+import type { Decision } from './deck/Untangle'
+const Untangle = lazy(() => import('./deck/Untangle').then(module => ({ default: module.Untangle })))
 
 type Owner = { id: string; kind: 'org' | 'user'; watched: boolean }
 type Repo = { id: string; watched: boolean; aiAllowed: boolean }
@@ -19,6 +21,7 @@ function SettingsPage() {
   const queryClient = useQueryClient()
   const settings = useQuery({ queryKey: ['settings'], queryFn: () => api<Settings>('/api/settings') })
   const aiStatus = useQuery({ queryKey: ['ai'], queryFn: () => api<{ enabled: boolean; calls: AiCall[] }>('/api/ai/status') })
+  const applyPolicy = useQuery({ queryKey: ['apply-policy'], queryFn: () => api<{ enabled: boolean; sandboxRepo: string | null }>('/api/actions/policy') })
   const [draft, setDraft] = useState<Settings | null>(null)
   const [owner, setOwner] = useState('')
   const [kind, setKind] = useState<'org' | 'user'>('org')
@@ -68,6 +71,10 @@ function SettingsPage() {
     <label>Bot logins (comma-separated)<input value={value.botLogins.join(', ')}
       onChange={e => setDraft({ ...value, botLogins: e.target.value.split(',').map(s => s.trim()).filter(Boolean) })} /></label>
     </section>
+    <section className="settings-section" aria-labelledby="apply-policy-heading"><h2 id="apply-policy-heading">GitHub Apply safety</h2>
+      <p>{applyPolicy.data?.enabled ? `Apply is restricted to sandbox: ${applyPolicy.data.sandboxRepo ?? 'none configured'}.` : 'Apply is disabled. Queuing actions never posts them.'}</p>
+      <p className="quiet">Set Apply:SandboxRepo and Apply:Enabled in Host user-secrets only after authorizing sandbox tests. Each action still needs its own confirmation.</p>
+      {applyPolicy.error && <p role="alert">{applyPolicy.error.message}</p>}</section>
     <section className="settings-section" aria-labelledby="calls-heading"><h2 id="calls-heading">Recent AI calls</h2>{aiStatus.error && <p role="alert">{aiStatus.error.message}</p>}
     {aiStatus.data?.calls.length === 0 && <p className="quiet">No provider calls recorded.</p>}
     {aiStatus.data?.calls.map((call, i) => <article className="ai-call-row" key={i}>
@@ -86,6 +93,7 @@ function Workspace() {
   const queryClient = useQueryClient()
   const path = window.location.pathname
   const board = useQuery({ queryKey: ['board'], queryFn: () => api<Board>('/api/board') })
+  const decisions = useQuery({ queryKey: ['decisions'], queryFn: () => api<Decision[]>('/api/decisions') })
   const status = useLiveEvents()
   const dimOthers = useBoardUi(s => s.dimOthers)
   const toggleOthers = useBoardUi(s => s.toggleOthers)
@@ -108,9 +116,9 @@ function Workspace() {
   const mine = board.data?.cards.filter(p => p.isMine).length ?? 0
   const others = (board.data?.cards.length ?? 0) - mine
   return <><header className="top-bar"><a className="brand" href="/" aria-label="Tangle board"><svg width="30" height="30" viewBox="0 0 30 30" fill="none" aria-hidden="true"><path d="M4 22C10 4 22 4 18 14S6 16 15 11 28 14 26 24" /></svg>tangle</a>
-    <nav className="view-switch"><a href="/" aria-current={path === '/' ? 'page' : undefined}>Board</a><span title="Arrives in M6">Untangle</span></nav>
+    <nav className="view-switch"><a href="/" aria-current={path === '/' ? 'page' : undefined}>Board</a><a href="/untangle" aria-current={path === '/untangle' ? 'page' : undefined}>Untangle</a></nav>
     <div className="header-counts"><span><b>{mine}</b> yours</span><span><b>{others}</b> around you</span><span><b>{board.data?.strings.length ?? 0}</b> strings</span></div>
-    <div className="header-spacer" /><span className="knot-meter">Untied 0 of {mine}<span aria-hidden="true" className="knots">{Array.from({ length: Math.min(mine, 20) }, (_, i) => <i key={i} />)}</span></span>
+    <div className="header-spacer" /><span className="knot-meter">Untied {new Set(decisions.data?.map(d => d.prId)).size} of {mine}<span aria-hidden="true" className="knots">{Array.from({ length: Math.min(mine, 20) }, (_, i) => <i key={i} style={{ background: i < (decisions.data?.length ?? 0) ? 'var(--yarn)' : undefined }} />)}</span></span>
     <button className="header-button" disabled={others === 0} aria-pressed={others > 0 && dimOthers} onClick={toggleOthers}
       title={others === 0 ? 'Every PR on this board is authored by you.' : 'Fade cards authored by other people, not cards waiting on a reviewer.'}>
       {others === 0 ? 'No others’ PRs to dim' : dimOthers ? 'Show others’ PRs' : 'Dim others’ PRs'}</button>
@@ -119,6 +127,7 @@ function Workspace() {
     {creatingSticky && <NewSticky onClose={() => setCreatingSticky(false)} />}
     {(status || sync.error) && <div className={`notice ${sync.error ? 'notice-error' : ''}`} role={sync.error ? 'alert' : 'status'}>{sync.error?.message ?? status}</div>}
     {path === '/settings' ? <main className="settings-wrap"><SettingsPage /></main> :
+      path === '/untangle' && board.data ? <Suspense fallback={<p role="status">Loading Untangle…</p>}><Untangle board={board.data} /></Suspense> :
       path !== '/' ? <main className="settings-wrap"><h1>Page not found</h1><a href="/">Back to the board</a></main> :
       board.error ? <main className="settings-wrap"><p role="alert">{board.error.message}</p></main> :
       board.data ? <main className="board-workspace"><BoardView board={board.data} /><SidePanel board={board.data} />

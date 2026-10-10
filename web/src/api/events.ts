@@ -26,6 +26,10 @@ export function useLiveEvents() {
       void client.invalidateQueries({ queryKey: ['ai'] })
     })
     events.addEventListener('verdict.ready', () => { void client.invalidateQueries({ queryKey: ['ai'] }) })
+    events.addEventListener('action.changed', () => {
+      void client.invalidateQueries({ queryKey: ['actions'] })
+      void client.invalidateQueries({ queryKey: ['decisions'] })
+    })
     events.onerror = () => setStatus('Live connection interrupted; reconnecting…')
     events.onopen = () => setStatus('')
     return () => events.close()
