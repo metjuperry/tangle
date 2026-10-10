@@ -6,7 +6,7 @@ using Tangle.Core;
 
 namespace Tangle.Ai;
 
-public sealed class HaikuDecider(AnthropicClient client) : IDecider
+public sealed class HaikuDecider(AnthropicClient client) : IMeasuredDecider
 {
     public const string ModelId = "claude-haiku-5-5";
     public const int MaximumInputBytes = 60000;
@@ -28,6 +28,13 @@ public sealed class HaikuDecider(AnthropicClient client) : IDecider
         """;
     public async Task<PrJudgment> JudgePrAsync(PrContext pr, CancellationToken ct) =>
         ParseVerdict(await SendAsync("verdict", pr, VerdictSchema, 1024, ct));
+    public async Task<PrJudgment> ExplainAsync(PrContext pr, PrJudgment judgment, CancellationToken ct)
+    {
+        var input = new { pr, action = judgment.Action.ToString().ToLowerInvariant(), judgment.Confidence, judgment.Priority };
+        var answer = ParseVerdict(await SendAsync("explain", input, VerdictSchema, 1024, ct));
+        if (answer.Action != judgment.Action) throw new InvalidOperationException("Explanation attempted to change the chosen action.");
+        return judgment with { Reason = answer.Reason, Intent = answer.Intent };
+    }
     public async Task<IReadOnlyList<LinkJudgment>> JudgePairsAsync(IReadOnlyList<PairContext> pairs, CancellationToken ct)
     {
         if (pairs.Count == 0) return [];

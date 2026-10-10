@@ -24,5 +24,6 @@
 
   <ItemGroup>
     <ProjectReference Include="../../src/Tangle.Data/Tangle.Data.csproj" />
+    <Content Include="../fixtures/jev-*.json" Link="fixtures/%(Filename)%(Extension)" CopyToOutputDirectory="PreserveNewest" />
   </ItemGroup>
 </Project>

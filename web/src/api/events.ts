@@ -30,11 +30,16 @@ export function useLiveEvents() {
     events.addEventListener('action.changed', () => {
       void client.invalidateQueries({ queryKey: ['actions'] })
       void client.invalidateQueries({ queryKey: ['decisions'] })
+      void client.invalidateQueries({ queryKey: ['evaluation'] })
     })
     events.addEventListener('receipt.saved', () => {
       void client.invalidateQueries({ queryKey: ['actions'] })
       void client.invalidateQueries({ queryKey: ['decisions'] })
       void client.invalidateQueries({ queryKey: ['receipt-history'] })
+    })
+    events.addEventListener('evaluation.ready', () => {
+      void client.invalidateQueries({ queryKey: ['evaluation'] })
+      void client.invalidateQueries({ queryKey: ['ai'] })
     })
     events.onerror = () => setStatus('Live connection interrupted; reconnecting…')
     events.onopen = () => setStatus('')

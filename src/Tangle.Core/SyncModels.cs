@@ -12,6 +12,9 @@ public sealed record WatchedSettings(IReadOnlyList<OwnerSetting> Owners, IReadOn
 {
     public IReadOnlyList<string> BotLogins { get; init; } = ["dependabot", "dependabot[bot]", "github-actions", "github-actions[bot]"];
     public decimal AiBudget { get; init; } = 1m;
+    public string AiVerdicts { get; init; } = "haiku-5-5";
+    public string AiPairs { get; init; } = "haiku-5-5";
+    public string AiExplain { get; init; } = "haiku-5-5";
 }
 public sealed record PrEvent(string At, string? Actor, string Kind, string Detail)
 {

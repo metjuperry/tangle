@@ -31,6 +31,13 @@ builder.Services.AddSingleton<PersonalKeys>();
 builder.Services.AddSingleton<SessionService>();
 builder.Services.AddTangleMcp();
 builder.Services.AddSingleton<IAiStore, AiStore>();
+builder.Services.AddSingleton<IEvaluationStore, EvaluationStore>();
+builder.Services.AddSingleton<IExplanationStore, ExplanationStore>();
+builder.Services.AddSingleton<IExplanationService, ExplanationService>();
+builder.Services.AddSingleton<DeciderRegistry>();
+builder.Services.AddSingleton<EvaluationRunner>();
+builder.Services.AddSingleton<IEvaluationReports>(s => s.GetRequiredService<EvaluationRunner>());
+builder.Services.AddSingleton(s => new JevDecider(new HttpClient(), s.GetRequiredService<IConfiguration>()["TYPESAFE_API_KEY"] ?? ""));
 builder.Services.AddSingleton(services =>
 {
     var configuration = services.GetRequiredService<IConfiguration>();
@@ -41,7 +48,8 @@ builder.Services.AddSingleton(services =>
 });
 builder.Services.AddSingleton(services => new AiWorker(services.GetRequiredService<IAiStore>(),
     services.GetRequiredService<HaikuDecider>(), services.GetRequiredService<ILiveEvents>(),
-    services.GetRequiredService<ILogger<AiWorker>>(), builder.Configuration.GetValue<bool>("Ai:Enabled")));
+    services.GetRequiredService<ILogger<AiWorker>>(), builder.Configuration.GetValue<bool>("Ai:Enabled"),
+    services.GetRequiredService<DeciderRegistry>()));
 builder.Services.AddSingleton<IAiQueue>(s => s.GetRequiredService<AiWorker>());
 builder.Services.AddHostedService(s => s.GetRequiredService<AiWorker>());
 builder.Services.AddSingleton<ISyncStore>(services => services.GetRequiredService<SyncStore>());
@@ -63,6 +71,7 @@ app.MapAuthoringEndpoints();
 app.MapActionEndpoints();
 app.MapSessionEndpoints();
 app.MapTangleMcp();
+app.MapEvaluationEndpoints();
 app.MapWebShell();
 app.Run();
 

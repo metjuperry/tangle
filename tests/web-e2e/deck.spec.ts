@@ -53,7 +53,7 @@ test('compact tear control appears only for applied actions and history is in to
   await expect(page.locator('.tear-button')).toHaveCount(0)
   const controls = await page.locator('.top-bar .header-button').allTextContents()
   expect(controls.indexOf('History')).toBe(controls.indexOf('Sync') + 1)
-  expect(controls.indexOf('Settings')).toBe(controls.indexOf('History') + 1)
+  expect(controls.indexOf('Settings')).toBeGreaterThan(controls.indexOf('History'))
   await page.getByRole('button', { name: 'History', exact: true }).click()
   await expect(page.getByRole('dialog', { name: 'Receipt history' })).toBeVisible()
   await page.keyboard.press('Escape')

@@ -25,6 +25,10 @@ export function SidePanel({ board }: { board: Board }) {
     mutationFn: () => write('/api/positions/reset', 'POST', { nodeRefs: stack!.map(p => `pr:${p.id}`) }),
     onSuccess: () => client.invalidateQueries({ queryKey: ['board'] }),
   })
+  const explain = useMutation({
+    mutationFn: () => write(`/api/prs/${card!.repoId}/${card!.number}/explain`, 'POST', {}),
+    onSuccess: () => client.invalidateQueries({ queryKey: ['board'] }),
+  })
   const context = useQuery({ queryKey: ['pr', selected], enabled: !!card,
     queryFn: () => api<Context>(`/api/prs/${card!.repoId}/${card!.number}`) })
   const yarn = [...board.strings, ...(board.cutStrings ?? [])].find(s => s.id === stringId)
@@ -47,6 +51,8 @@ export function SidePanel({ board }: { board: Board }) {
       {card.verdict && <div className="fact-block"><p className="eyebrow">Suggested next step · {Math.round(card.verdict.confidence * 100)}% confidence</p>
         <strong>{actionLabel(card.verdict.action)}</strong><p>{friendlyAiText(card.verdict.reason)}</p><p className="quiet">AI proposal, not an action.</p>
         {card.verdict.createdAt && <p className="quiet">Generated {new Date(card.verdict.createdAt).toLocaleString()}; check against current facts.</p>}</div>}
+      {card.verdict?.decider === 'jev' && !card.verdict.intent && <div><button disabled={explain.isPending} onClick={() => explain.mutate()}>Explain with Haiku</button>
+        <p className="quiet">Uses your allowed repo context and monthly API budget.</p>{explain.error && <p role="alert">{explain.error.message}</p>}</div>}
       {card.verdict?.intent && <><h3>Why it exists</h3><p>{friendlyAiText(card.verdict.intent)}</p></>}
       <Sessions key={`sessions:${card.id}`} prId={card.id} />
       {context.isPending && <p role="status">Loading the card back…</p>}

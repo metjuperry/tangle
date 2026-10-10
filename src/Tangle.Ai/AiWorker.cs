@@ -9,7 +9,7 @@ using Tangle.Core;
 namespace Tangle.Ai;
 
 public sealed class AiWorker(IAiStore store, HaikuDecider decider, ILiveEvents events, ILogger<AiWorker> logger,
-    bool enabled) : BackgroundService, IAiQueue
+    bool enabled, DeciderRegistry? registry = null) : BackgroundService, IAiQueue
 {
     private readonly Channel<bool> queue = Channel.CreateBounded<bool>(new BoundedChannelOptions(1) { FullMode = BoundedChannelFullMode.DropWrite });
     public void Enqueue()
@@ -33,39 +33,49 @@ public sealed class AiWorker(IAiStore store, HaikuDecider decider, ILiveEvents e
     {
         if (!enabled) return;
         var snapshot = await store.SnapshotAsync(ct);
+        var verdictDecider = registry?.Get(snapshot.VerdictDecider) ?? decider;
+        var pairDecider = registry?.Get(snapshot.PairDecider) ?? decider;
         foreach (var pr in snapshot.Prs)
         {
             var hash = Hash("verdict", pr);
-            var work = AiCacheKeys.Verdict(pr);
+            var work = WorkFor(AiCacheKeys.Verdict(pr), verdictDecider.Name);
             if (await store.LookedAsync(work, snapshot.Prs, ct) || await store.CachedAsync(hash, ct)) continue;
             HaikuDecider.SerializeInput(pr);
             // Reserve a conservative bound before any provider call; unresolved calls retain the reservation.
-            var reservation = await store.ReserveAsync(hash, decider.Name, .02m, ct, "verdict", [pr.Ref], [work]);
+            hash = verdictDecider.Name + ":" + hash;
+            var reservation = await store.ReserveAsync(hash, verdictDecider.Name, .02m, ct, "verdict", [pr.Ref], [work],
+                JsonSerializer.Serialize(pr, HaikuDecider.Json));
             if (reservation is null) { events.Publish("ai.budget", new { reached = true }); return; }
             try
             {
                 var fresh = (await store.SnapshotAsync(ct)).Prs.FirstOrDefault(p => p.Ref == pr.Ref);
-                if (fresh is null || Hash("verdict", fresh) != hash)
+                if (fresh is null || verdictDecider.Name + ":" + Hash("verdict", fresh) != hash)
                 {
                     await store.FailAsync(reservation, "AI context or repo opt-in changed before call.", new(0, 0, 0, 0), ct);
                     continue;
                 }
-                var result = await decider.JudgePrAsync(pr, ct);
-                await store.FinishAsync(reservation, decider.LastUsage!, pr, result, null, ct);
+                await ProviderExecution.Gate.WaitAsync(ct);
+                try
+                {
+                    var result = await verdictDecider.JudgePrAsync(pr, ct);
+                    await store.FinishAsync(reservation, verdictDecider.LastUsage!, pr, result, null, ct);
+                }
+                finally { ProviderExecution.Gate.Release(); }
                 events.Publish("verdict.ready", new { id = pr.Ref[3..] });
+                events.Publish("evaluation.ready", new { });
             }
             catch (Exception e)
             {
-                await store.FailAsync(reservation, e.Message, decider.LastUsage, CancellationToken.None);
+                await store.FailAsync(reservation, e.Message, verdictDecider.LastUsage, CancellationToken.None);
                 throw;
             }
         }
         var pairs = new List<PairContext>();
         foreach (var pair in Candidates(snapshot))
-            if (!await store.LookedAsync(AiCacheKeys.Pair(pair), snapshot.Prs, ct)) pairs.Add(pair);
+            if (!await store.LookedAsync(WorkFor(AiCacheKeys.Pair(pair), pairDecider.Name), snapshot.Prs, ct)) pairs.Add(pair);
         foreach (var batch in Batches(pairs))
         {
-            var hash = Hash("pairs", HaikuDecider.PairInput(batch));
+            var hash = pairDecider.Name + ":" + Hash("pairs", HaikuDecider.PairInput(batch));
             if (await store.CachedAsync(hash, ct)) continue;
             var current = await store.SnapshotAsync(ct);
             var currentRefs = current.Prs.Select(p => p.Ref).Concat(current.Stickies.Select(s => s.Ref)).ToHashSet();
@@ -74,22 +84,30 @@ public sealed class AiWorker(IAiStore store, HaikuDecider decider, ILiveEvents e
                 current.ExistingPairs.Any(e => e.ARef == p.ARef && e.BRef == p.BRef) ||
                 !currentPairs.Any(fresh => fresh.ARef == p.ARef && fresh.BRef == p.BRef &&
                     AiCacheKeys.Pair(fresh).StateHash == AiCacheKeys.Pair(p).StateHash))) continue;
-            var reservation = await store.ReserveAsync(hash, decider.Name, .20m, ct, "pairs",
-                batch.Select(p => $"{p.ARef} ↔ {p.BRef}").ToArray(), batch.Select(AiCacheKeys.Pair).ToArray());
+            var reservation = await store.ReserveAsync(hash, pairDecider.Name, .20m, ct, "pairs",
+                batch.Select(p => $"{p.ARef} ↔ {p.BRef}").ToArray(),
+                batch.Select(p => WorkFor(AiCacheKeys.Pair(p), pairDecider.Name)).ToArray(), JsonSerializer.Serialize(batch, HaikuDecider.Json));
             if (reservation is null) { events.Publish("ai.budget", new { reached = true }); return; }
             try
             {
-                var result = await decider.JudgePairsAsync(batch, ct);
-                await store.FinishAsync(reservation, decider.LastUsage!, null, null, result, ct);
+                await ProviderExecution.Gate.WaitAsync(ct);
+                try
+                {
+                    var result = await pairDecider.JudgePairsAsync(batch, ct);
+                    await store.FinishAsync(reservation, pairDecider.LastUsage!, null, null, result, ct);
+                }
+                finally { ProviderExecution.Gate.Release(); }
                 events.Publish("link.changed", new { });
+                events.Publish("evaluation.ready", new { });
             }
             catch (Exception e)
             {
-                await store.FailAsync(reservation, e.Message, decider.LastUsage, CancellationToken.None);
+                await store.FailAsync(reservation, e.Message, pairDecider.LastUsage, CancellationToken.None);
                 throw;
             }
         }
     }
+    private static AiWork WorkFor(AiWork work, string name) => name == "haiku-5-5" ? work : work with { Job = $"{work.Job}:{name}" };
     public static IReadOnlyList<PairContext[]> Batches(IReadOnlyList<PairContext> pairs)
     {
         var result = new List<PairContext[]>();

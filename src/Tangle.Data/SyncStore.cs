@@ -19,7 +19,10 @@ public sealed partial class SyncStore(Database database, TimeProvider? clock = n
         {
             BotLogins = JsonSerializer.Deserialize<string[]>(bots) ?? throw new InvalidOperationException("Bot logins setting is invalid."),
             AiBudget = decimal.Parse(await db.QuerySingleAsync<string>(new CommandDefinition("SELECT value FROM app_setting WHERE key='ai_budget'", cancellationToken: ct)),
-                System.Globalization.CultureInfo.InvariantCulture)
+                System.Globalization.CultureInfo.InvariantCulture),
+            AiVerdicts = await db.QuerySingleAsync<string>(new CommandDefinition("SELECT value FROM app_setting WHERE key='ai_verdicts'", cancellationToken: ct)),
+            AiPairs = await db.QuerySingleAsync<string>(new CommandDefinition("SELECT value FROM app_setting WHERE key='ai_pairs'", cancellationToken: ct)),
+            AiExplain = await db.QuerySingleAsync<string>(new CommandDefinition("SELECT value FROM app_setting WHERE key='ai_explain'", cancellationToken: ct))
         };
     }
 
@@ -44,6 +47,9 @@ public sealed partial class SyncStore(Database database, TimeProvider? clock = n
             new { value = JsonSerializer.Serialize(settings.BotLogins) }, tx, cancellationToken: ct));
         await db.ExecuteAsync(new CommandDefinition("UPDATE app_setting SET value=@value WHERE key='ai_budget'",
             new { value = settings.AiBudget.ToString(System.Globalization.CultureInfo.InvariantCulture) }, tx, cancellationToken: ct));
+        foreach (var setting in new[] { ("ai_verdicts", settings.AiVerdicts), ("ai_pairs", settings.AiPairs), ("ai_explain", settings.AiExplain) })
+            await db.ExecuteAsync(new CommandDefinition("UPDATE app_setting SET value=@value WHERE key=@key",
+                new { key = setting.Item1, value = setting.Item2 }, tx, cancellationToken: ct));
         if (changed)
             await db.ExecuteAsync(new CommandDefinition("DELETE FROM sync_state", transaction: tx, cancellationToken: ct));
         await ComputeCacheAsync(db, tx, ct);
@@ -130,7 +136,7 @@ public sealed partial class SyncStore(Database database, TimeProvider? clock = n
         var facts = (await db.QueryAsync<PrFacts>(new CommandDefinition(FactSelect, cancellationToken: ct)))
             .ToDictionary(f => f.PrId);
         var verdicts = (await db.QueryAsync<StoredVerdict>(new CommandDefinition("""
-            SELECT pr_id AS PrId,action AS Action,confidence AS Confidence,priority AS Priority,reason AS Reason,intent AS Intent,created_at AS CreatedAt
+            SELECT pr_id AS PrId,decider AS Decider,action AS Action,confidence AS Confidence,priority AS Priority,reason AS Reason,intent AS Intent,created_at AS CreatedAt
             FROM verdict ORDER BY created_at DESC
             """, cancellationToken: ct))).GroupBy(v => v.PrId).ToDictionary(g => g.Key, g => g.First());
         return rows.Select(r => r with { Facts = facts.GetValueOrDefault(r.Id), Verdict = verdicts.GetValueOrDefault(r.Id) }).ToArray();

@@ -63,7 +63,8 @@ matches remain unattached. Unmatched reports can be attached from a card back.
 
 MCP reads: `list_prs`, `get_pr_context`, `get_threads`, `get_eval_report`.
 MCP proposals: `add_note`, `propose_link`, `record_verdict`, `queue_action`.
-There is **no Apply tool**. Stale reads refresh GitHub on demand, potentially
+There is **no Apply tool**. `get_eval_report` reads saved evaluation metrics
+without a provider replay. Other stale reads refresh GitHub on demand, potentially
 starting the normal AI pass only if you already enabled it for those repos.
 
 The repository's `.claude/skills/pr-triage/SKILL.md` describes the safe triage

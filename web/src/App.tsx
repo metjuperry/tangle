@@ -7,26 +7,25 @@ import { SidePanel } from './card/SidePanel'
 import { useBoardUi } from './board/store'
 import { useLiveEvents } from './api/events'
 import { NewSticky } from './card/AuthoringPanel'
-import { friendlyAiText } from './api/aiText'
 import type { Decision } from './deck/Untangle'
 import type { Action } from './deck/Receipt'
 import { ViewLoading } from './theme/ViewLoading'
 import { activeDecisionIds } from './deck/progress'
 import { ReceiptHistory } from './deck/ReceiptHistory'
 import { PersonalKeys } from './settings/PersonalKeys'
+import { Evaluate } from './evaluate/Evaluate'
+import type { AiStatus } from './evaluate/AiCalls'
 const Untangle = lazy(() => import('./deck/Untangle').then(module => ({ default: module.Untangle })))
 
 type Owner = { id: string; kind: 'org' | 'user'; watched: boolean }
 type Repo = { id: string; watched: boolean; aiAllowed: boolean }
-type Settings = { owners: Owner[]; repos: Repo[]; botLogins: string[]; aiBudget: number }
+type Settings = { owners: Owner[]; repos: Repo[]; botLogins: string[]; aiBudget: number; aiVerdicts: string; aiPairs: string; aiExplain: string }
 type SyncResult = { fetched: number; changed: number; calls: number; cost: number }
-type AiCall = { cost: number; reservedCost: number; status: string; error: string | null; createdAt: string; job: string | null;
-  targets: string | null; outcome: string | null; prId: string | null; inputTokens: number; outputTokens: number; latencyMs: number }
 const queries = new QueryClient()
 function SettingsPage() {
   const queryClient = useQueryClient()
   const settings = useQuery({ queryKey: ['settings'], queryFn: () => api<Settings>('/api/settings') })
-  const aiStatus = useQuery({ queryKey: ['ai'], queryFn: () => api<{ enabled: boolean; calls: AiCall[] }>('/api/ai/status') })
+  const aiStatus = useQuery({ queryKey: ['ai'], queryFn: () => api<AiStatus>('/api/ai/status') })
   const applyPolicy = useQuery({ queryKey: ['apply-policy'], queryFn: () => api<{ enabled: boolean; sandboxRepo: string | null }>('/api/actions/policy') })
   const [draft, setDraft] = useState<Settings | null>(null)
   const [owner, setOwner] = useState('')
@@ -73,6 +72,13 @@ function SettingsPage() {
     <label className="budget-field">Monthly AI budget (USD)<input type="number" min="0" max="100" step="0.01" value={value.aiBudget ?? 1}
       onChange={e => setDraft({ ...value, aiBudget: Number(e.target.value) })} /></label>
     <p className="quiet">API keys and GitHub tokens belong in user-secrets or your environment, never in this page.</p></section>
+    <section className="settings-section" aria-labelledby="decider-heading"><h2 id="decider-heading">AI jobs</h2>
+      <p>Haiku remains the default. Switching a job to Jev requires explicit server opt-in and your TYPESAFE_API_KEY.</p>
+      {(['aiVerdicts', 'aiPairs', 'aiExplain'] as const).map((job, i) => <label key={job}>{['Next-step verdicts', 'Relationship suggestions', 'Written explanations'][i]}
+        <select value={value[job] ?? 'haiku-5-5'} onChange={event => setDraft({ ...value, [job]: event.target.value })}>
+          <option value="haiku-5-5">Haiku 5.5</option>{job !== 'aiExplain' && <option value="jev" disabled={!aiStatus.data?.jevEnabled}>Jev {!aiStatus.data?.jevEnabled && '(disabled)'}</option>}
+        </select></label>)}
+    </section>
     <section className="settings-section" aria-labelledby="bots-heading"><h2 id="bots-heading">Bot detection</h2><p>These accounts don’t count as human activity when calculating idle time and whose turn it is.</p>
     <label>Bot logins (comma-separated)<input value={value.botLogins.join(', ')}
       onChange={e => setDraft({ ...value, botLogins: e.target.value.split(',').map(s => s.trim()).filter(Boolean) })} /></label>
@@ -82,18 +88,12 @@ function SettingsPage() {
       <p className="quiet">Set Apply:SandboxRepo and Apply:Enabled in Host user-secrets only after authorizing sandbox tests. Each action still needs its own confirmation.</p>
       {applyPolicy.error && <p role="alert">{applyPolicy.error.message}</p>}</section>
     <PersonalKeys />
-    <section className="settings-section" aria-label="AI call history">
+    <section className="settings-section" aria-labelledby="evaluate-settings-heading">
+    <h2 id="evaluate-settings-heading">Evaluation and AI history</h2>
+    <p>Review suggestion quality, compare models and inspect recent AI calls without making provider requests.</p>
+    <a className="settings-evaluate-link" href="/evaluate">Open Evaluate</a>
     {aiStatus.error && <p role="alert">{aiStatus.error.message}</p>}
-    <details className="ai-history"><summary>Recent AI calls <span>{aiStatus.data ? `(${aiStatus.data.calls.length})` : '(loading…)'}</span></summary>
-    <p className="quiet">Request details and costs. These do not change your settings.</p>
-    {aiStatus.data?.calls.length === 0 && <p className="quiet">No provider calls recorded.</p>}
-    {aiStatus.data?.calls.map((call, i) => <article className="ai-call-row" key={i}>
-      <div className="ai-call-heading"><b>{call.job === 'verdict' ? 'PR next-step assessment' : call.job === 'pairs' ? 'Relationship assessment' : 'Earlier AI call'}</b><span>{call.status}</span></div>
-      {call.prId && <a href={`/?pr=${encodeURIComponent(call.prId)}`}>{call.prId} · View card</a>}
-      <p>{call.error ? `Failed: ${call.error}` : call.outcome ? friendlyAiText(call.outcome) : (call.status === 'reserved' ? 'Waiting for completion; usage may be unknown.' : 'Details were not recorded for this earlier call.')}</p>
-      {call.targets && <details><summary>What was assessed</summary><ul>{(JSON.parse(call.targets) as string[]).map(target => <li key={target}>{target.replaceAll('pr:', '')}</li>)}</ul></details>}
-      <small>{new Date(call.createdAt).toLocaleString()} · ${call.cost.toFixed(6)}{call.status === 'reserved' && ` · $${call.reservedCost.toFixed(2)} budget reserved`} · {call.inputTokens} input / {call.outputTokens} output tokens · {call.latencyMs} ms</small>
-    </article>)}</details></section></div>
+    </section></div>
     <footer className="settings-save"><span>Changes apply only when you save.</span><button disabled={save.isPending} onClick={() => save.mutate(value)}>{save.isPending ? 'Saving…' : 'Save settings'}</button>
     {save.error && <p role="alert">{save.error.message}</p>}{save.isSuccess && <p role="status">Settings saved.</p>}</footer>
   </section>
@@ -188,6 +188,7 @@ function Workspace() {
     {switching && <ViewLoading destination={destination} />}
     <Suspense fallback={<ViewLoading destination={destination} />}>
     {path === '/settings' ? <main className="settings-wrap"><SettingsPage /></main> :
+      path === '/evaluate' ? <Evaluate /> :
       path === '/untangle' && board.data ? <Untangle board={board.data} /> :
       path === '/untangle' && board.isPending ? <ViewLoading destination="/untangle" /> :
       path === '/untangle' && board.error ? <main className="settings-wrap"><p role="alert">{board.error.message}</p></main> :
