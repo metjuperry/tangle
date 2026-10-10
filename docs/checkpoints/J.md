@@ -36,6 +36,8 @@ Build `web/`, restart the host and open Help.
 
 ## Validation and limitations
 
+Published as [PR #10](https://github.com/metjuperry/tangle/pull/10), based on M8 and left unmerged. Local validation passed 100 .NET tests and the 42-test browser suite; targeted Help/search/zoom/axe checks also passed after the final lazy-loading adjustment. No cloud or provider operation was performed.
+
 Browser tests cover search, summaries, keyboard focus, feature help and axe.
 The complete fixture suite also covers authoring, receipt, sessions and evaluation.
 No paid AI call or GitHub backlog action was performed for this milestone.
