@@ -1,8 +1,20 @@
-<img src="docs/brand/tangle-mark.svg" width="64" height="64" alt="Tangle: two pins joined by knotted yarn">
+<p align="center">
+  <picture>
+    <source media="(prefers-color-scheme: dark)" srcset="docs/brand/tangle-lockup-on-dark.png">
+    <source media="(prefers-color-scheme: light)" srcset="docs/brand/tangle-lockup.png">
+    <img src="docs/brand/tangle-lockup.png" width="375" alt="Tangle — two pins joined by knotted yarn">
+  </picture>
+</p>
 
-# Tangle
+<p align="center"><strong>Pull requests, untangled.</strong><br>
+A personal yarn board for triaging GitHub pull requests across repositories.</p>
 
-A personal yarn board for triaging GitHub pull requests across repositories.
+<p align="center">
+  <a href="#run-locally">Run locally</a> ·
+  <a href="docs/user-guide.md">User guide</a> ·
+  <a href="docs/setup-claude-code.md">Connect Claude Code</a>
+</p>
+
 Pinned cards show whose turn it is; strings connect related work. Notes, ties,
 cuts and layouts survive sync. AI only proposes; GitHub actions require an
 explicit confirmation.
