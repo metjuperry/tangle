@@ -1,0 +1,9 @@
+@import '@fontsource/bricolage-grotesque/latin-400.css';
+@import '@fontsource/bricolage-grotesque/latin-700.css';
+@import '@fontsource/ibm-plex-mono/latin-400.css';
+@import '@fontsource/caveat/latin-400.css';
+
+:root { font-family: 'Bricolage Grotesque', sans-serif; color: #221c15; background: #b98b5b; }
+body { margin: 0; }
+* { box-sizing: border-box; }
+:focus-visible { outline: 3px solid #2d6bd6; outline-offset: 2px; }

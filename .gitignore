@@ -1,0 +1,15 @@
+**/bin/
+**/obj/
+**/node_modules/
+**/wwwroot/
+**/test-results/
+**/playwright-report/
+*.db
+*.db-*
+*.sqlite
+*.sqlite-*
+.env
+.env.*
+!.env.example
+appsettings.*.local.json
+.DS_Store

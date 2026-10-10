@@ -1,0 +1,68 @@
+using System.Net;
+using System.Net.Http.Json;
+using Microsoft.AspNetCore.Hosting;
+using Microsoft.AspNetCore.Mvc.Testing;
+using Microsoft.Data.Sqlite;
+using Microsoft.Extensions.Configuration;
+
+namespace Tangle.Web.Tests;
+
+public sealed class TangleFactory : WebApplicationFactory<Program>
+{
+    public const string Key = "tangle-api-test-key-not-a-secret-123";
+    private readonly string directory = Path.Combine(Path.GetTempPath(), $"tangle-api-{Guid.NewGuid()}");
+    protected override void ConfigureWebHost(IWebHostBuilder builder) =>
+        builder.ConfigureAppConfiguration((_, configuration) => configuration.AddInMemoryCollection(
+            new Dictionary<string, string?>
+            {
+                ["Tangle:DevelopmentKey"] = Key,
+                ["Tangle:Address"] = "http://127.0.0.1:5202",
+                ["Tangle:DatabasePath"] = Path.Combine(directory, "test.db")
+            }));
+    public HttpClient LocalClient() => CreateClient(new() { BaseAddress = new Uri("http://127.0.0.1:5202") });
+    protected override void Dispose(bool disposing)
+    {
+        base.Dispose(disposing);
+        if (disposing && Directory.Exists(directory))
+        {
+            SqliteConnection.ClearAllPools();
+            Directory.Delete(directory, recursive: true);
+        }
+    }
+}
+
+public sealed class HostTests(TangleFactory factory) : IClassFixture<TangleFactory>
+{
+    [Fact]
+    public async Task ProbeAndEmbeddedShellAreAvailable()
+    {
+        using var client = factory.LocalClient();
+        Assert.Equal(HttpStatusCode.OK, (await client.GetAsync("/healthz")).StatusCode);
+        Assert.Contains("<title>Tangle</title>", await client.GetStringAsync("/"));
+    }
+    [Fact]
+    public async Task KeyIsRequiredAndLoginUsesStrictHttpOnlyCookie()
+    {
+        using var client = factory.LocalClient();
+        Assert.Equal(HttpStatusCode.Unauthorized, (await client.GetAsync("/api/auth")).StatusCode);
+        Assert.Equal(HttpStatusCode.Unauthorized,
+            (await client.PostAsJsonAsync("/api/auth/login", new { key = "wrong" })).StatusCode);
+        var response = await client.PostAsJsonAsync("/api/auth/login", new { key = TangleFactory.Key });
+        Assert.Equal(HttpStatusCode.NoContent, response.StatusCode);
+        var cookie = response.Headers.GetValues("Set-Cookie").Single();
+        Assert.Contains("httponly", cookie, StringComparison.OrdinalIgnoreCase);
+        Assert.Contains("samesite=strict", cookie, StringComparison.OrdinalIgnoreCase);
+        Assert.Equal(HttpStatusCode.OK, (await client.GetAsync("/api/auth")).StatusCode);
+    }
+    [Theory]
+    [InlineData("evil.example:5202", null)]
+    [InlineData("127.0.0.1:5202", "https://evil.example")]
+    [InlineData("localhost:5202", null)]
+    public async Task ForeignHostAndOriginAreRejected(string host, string? origin)
+    {
+        using var client = factory.LocalClient();
+        client.DefaultRequestHeaders.Host = host;
+        if (origin is not null) client.DefaultRequestHeaders.Add("Origin", origin);
+        Assert.Equal(HttpStatusCode.Forbidden, (await client.GetAsync("/healthz")).StatusCode);
+    }
+}
