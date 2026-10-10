@@ -53,6 +53,8 @@ GitHub backlog mutation, paid AI call or Azure resource was created during M7.
 
 ## Decisions
 
+Session cards use a readable Claude Code session label, report date/branch and optional excerpt rather than a raw URL. Recognized HTTPS Claude links have an Open session action; raw IDs/URLs are available in expandable details. No link is invented for local session IDs and no transcript is fetched.
+
 - Excerpt off by default: decide whether you want the first prompt stored.
 - Session paths are metadata, not browsable transcript access; Tangle never
   opens a reported local path.
