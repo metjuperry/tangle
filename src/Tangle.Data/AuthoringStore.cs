@@ -71,6 +71,15 @@ public sealed class AuthoringStore(Database database, TimeProvider clock)
             ON CONFLICT(node_ref) DO UPDATE SET x=excluded.x,y=excluded.y,moved_by_me=1
             """, new { nodeRef, x, y }, cancellationToken: ct));
     }
+    public async Task ResetPositionsAsync(IReadOnlyList<string> nodeRefs, CancellationToken ct)
+    {
+        foreach (var reference in nodeRefs) await RequireRefAsync(reference, ct);
+        await using var db = await database.OpenAsync(ct);
+        using var tx = db.BeginTransaction();
+        await db.ExecuteAsync(new CommandDefinition("DELETE FROM position WHERE node_ref IN @nodeRefs",
+            new { nodeRefs }, tx, cancellationToken: ct));
+        tx.Commit();
+    }
     public async Task<AuthoringData> GetAsync(CancellationToken ct = default)
     {
         await using var db = await database.OpenAsync(ct);

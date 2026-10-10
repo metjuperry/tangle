@@ -36,6 +36,9 @@ public sealed class AuthoringTests
         Assert.Contains("Remember why", board["notes"]!.ToJsonString());
         Assert.Equal(3, board["notes"]!.AsArray().Count);
         Assert.Single(board["positions"]!.AsArray());
+        Assert.Equal(HttpStatusCode.OK, (await client.PostAsJsonAsync("/api/positions/reset", new { nodeRefs = new[] { "pr:example/repo#1" } })).StatusCode);
+        Assert.Empty((JsonNode.Parse(await client.GetStringAsync("/api/board"))!)["positions"]!.AsArray());
+        Assert.Equal(3, (JsonNode.Parse(await client.GetStringAsync("/api/board"))!)["notes"]!.AsArray().Count);
         Assert.Equal(HttpStatusCode.OK, (await client.PatchAsJsonAsync($"/api/links/{linkId}", new { status = "cut" })).StatusCode);
         await store.SaveScopeAsync("scope", [Pr(1), Pr(2)], "again", default);
         board = JsonNode.Parse(await client.GetStringAsync("/api/board"))!;
@@ -59,5 +62,7 @@ public sealed class AuthoringTests
         client.DefaultRequestHeaders.Authorization = new("Bearer", TangleFactory.Key);
         Assert.Equal(HttpStatusCode.NotFound, (await client.PostAsJsonAsync("/api/notes", new { targetRef = "pr:missing", text = "note" })).StatusCode);
         Assert.Equal(HttpStatusCode.BadRequest, (await client.PostAsJsonAsync("/api/stickies", new { title = "title", color = "invalid" })).StatusCode);
+        Assert.Equal(HttpStatusCode.BadRequest, (await client.PostAsJsonAsync("/api/positions/reset", new { nodeRefs = Array.Empty<string>() })).StatusCode);
+        Assert.Equal(HttpStatusCode.BadRequest, (await client.PostAsJsonAsync("/api/positions/reset", new { nodeRefs = new[] { "sticky:missing" } })).StatusCode);
     }
 }

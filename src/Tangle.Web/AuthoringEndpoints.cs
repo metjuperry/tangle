@@ -11,6 +11,7 @@ public static class AuthoringEndpoints
     public sealed record EditSticky(string Title, string Color, bool Archived = false);
     public sealed record AddNote(string TargetRef, string Text);
     public sealed record Move(double X, double Y);
+    public sealed record ResetPositions(IReadOnlyList<string> NodeRefs);
     public static void MapAuthoringEndpoints(this WebApplication app)
     {
         var api = app.MapGroup("/api").RequireAuthorization();
@@ -58,6 +59,15 @@ public static class AuthoringEndpoints
                 throw new ArgumentException("Provide finite card/sticky coordinates within ±100,000.");
             await store.PositionAsync(nodeRef, input.X, input.Y, ct);
             events.Publish("prs.changed", new { ids = Array.Empty<string>() }); return Results.Ok(new { saved = true });
+        });
+        api.MapPost("/positions/reset", async (ResetPositions input, AuthoringStore store, EventHub events, CancellationToken ct) =>
+        {
+            if (input.NodeRefs is null || input.NodeRefs.Count is 0 or > 100 ||
+                input.NodeRefs.Any(r => r is null || !r.StartsWith("pr:", StringComparison.Ordinal)))
+                throw new ArgumentException("Provide between 1 and 100 PR references to restore their automatic layout.");
+            await store.ResetPositionsAsync(input.NodeRefs, ct);
+            events.Publish("prs.changed", new { ids = input.NodeRefs.Select(r => r[3..]).ToArray() });
+            return Results.Ok(new { restored = true });
         });
     }
 }

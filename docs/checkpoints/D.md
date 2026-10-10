@@ -58,4 +58,6 @@ See [DECISIONS](../DECISIONS.md). Remote CI is still not claimed green until Git
 
 ## Review
 
+Review fixes: select any separated stack member and use **Group stack again** to restore the automatic dependency group. This clears only that stack's saved PR positions; ties, notes and all other positions remain. Sticky creation now lives in the top-bar **New sticky** button and opens a cancellable dialog, rather than appearing in every card's context.
+
 Tie three real business links, make one goal sticky, and arrange your cards. Check persistence after sync and browser restart. Approve checkpoint D only after authoring feels reliable; **M5 has not started**.

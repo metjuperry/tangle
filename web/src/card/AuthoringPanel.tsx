@@ -1,4 +1,4 @@
-import { useState } from 'react'
+import { useEffect, useRef, useState } from 'react'
 import { useMutation, useQueryClient } from '@tanstack/react-query'
 import { write, type Board, type Sticky, type Yarn } from '../api/client'
 import { useBoardUi } from '../board/store'
@@ -42,12 +42,17 @@ export function StickyEditor({ sticky, board }: { sticky: Sticky; board: Board }
     <button onClick={() => startTie(`sticky:${sticky.id}`)}>Tie a string</button><button onClick={() => save.mutate(true)}>Archive sticky</button>
     {save.error && <p role="alert">{save.error.message}</p>}<Notes board={board} targetRef={`sticky:${sticky.id}`} /></>
 }
-export function NewSticky() {
+export function NewSticky({ onClose }: { onClose: () => void }) {
   const [title, setTitle] = useState('')
+  const dialog = useRef<HTMLDialogElement>(null)
+  useEffect(() => { dialog.current?.showModal() }, [])
   const client = useQueryClient()
   const select = useBoardUi(s => s.select)
   const save = useMutation({ mutationFn: () => write<Sticky>('/api/stickies', 'POST', { title, color: 'yellow' }),
-    onSuccess: async sticky => { setTitle(''); await client.invalidateQueries({ queryKey: ['board'] }); select(`sticky:${sticky.id}`) } })
-  return <form onSubmit={e => { e.preventDefault(); save.mutate() }}><label>New sticky title<input value={title} onChange={e => setTitle(e.target.value)} required /></label>
-    <button>Create sticky</button>{save.error && <p role="alert">{save.error.message}</p>}</form>
+    onSuccess: async sticky => { setTitle(''); await client.invalidateQueries({ queryKey: ['board'] }); select(`sticky:${sticky.id}`); onClose() } })
+  return <dialog ref={dialog} className="new-sticky-dialog" aria-labelledby="new-sticky-heading" onCancel={onClose}>
+    <h2 id="new-sticky-heading">New sticky</h2>
+    <form onSubmit={e => { e.preventDefault(); save.mutate() }}><label>New sticky title<input autoFocus value={title} onChange={e => setTitle(e.target.value)} required maxLength={300} /></label>
+      <div><button disabled={save.isPending}>Create sticky</button><button type="button" onClick={onClose}>Cancel</button></div>
+      {save.error && <p role="alert">{save.error.message}</p>}</form></dialog>
 }

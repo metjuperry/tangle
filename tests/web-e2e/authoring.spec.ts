@@ -1,5 +1,46 @@
 import { test, expect } from '../../web/node_modules/@playwright/test'
 
+test('separate and regroup a branch stack without losing notes', async ({ page }) => {
+  await page.route('**/api/board', async route => {
+    const response = await route.fetch()
+    const board = await response.json()
+    board.cards = board.cards.filter((p: { repoId: string }) => p.repoId === 'example/tools')
+      .sort((a: { number: number }, b: { number: number }) => a.number - b.number)
+      .map((p: object, i: number) => ({ ...p, batchId: null, headRef: `stack-${i}`, baseRef: i === 0 ? 'main' : `stack-${i - 1}` }))
+    board.strings = []
+    await route.fulfill({ json: board })
+  })
+  await page.goto('/')
+  await page.getByLabel('Development key').fill('tangle-browser-test-key-not-a-secret')
+  await page.getByRole('button', { name: 'Unlock Tangle' }).click()
+  await expect(page.locator('.branch-stack')).toHaveCount(1)
+  await page.getByRole('button', { name: 'Arrange separately' }).click()
+  await expect(page.locator('.branch-stack')).toHaveCount(0)
+  await page.getByRole('button', { name: /example\/tools #195,/ }).click()
+  await page.getByLabel('Add a note').fill('Stack context survives')
+  await page.getByRole('button', { name: 'Pin it' }).click()
+  await expect(page.getByText('Stack context survives', { exact: true })).toBeVisible()
+  await page.getByRole('button', { name: 'Group stack again' }).click()
+  await expect(page.locator('.branch-stack')).toHaveCount(1)
+  await expect(page.getByText('Stack context survives', { exact: true })).toBeVisible()
+  await page.reload()
+  await expect(page.locator('.branch-stack')).toHaveCount(1)
+})
+
+test('sticky creation is a cancellable toolbar dialog, not card context', async ({ page }) => {
+  await page.goto('/')
+  await page.getByLabel('Development key').fill('tangle-browser-test-key-not-a-secret')
+  await page.getByRole('button', { name: 'Unlock Tangle' }).click()
+  await page.getByRole('button', { name: /example\/repo #49,/ }).click()
+  await expect(page.getByLabel('New sticky title')).toHaveCount(0)
+  await page.getByRole('button', { name: 'New sticky', exact: true }).click()
+  await expect(page.getByRole('dialog', { name: 'New sticky' })).toBeVisible()
+  await expect(page.getByLabel('New sticky title')).toBeFocused()
+  await page.keyboard.press('Escape')
+  await expect(page.getByRole('dialog')).toHaveCount(0)
+  await expect(page.getByRole('heading', { name: 'Open asks · 4' })).toBeVisible()
+})
+
 test('tie by keyboard, label, note, cut and re-tie survive sync', async ({ page }) => {
   await page.goto('/')
   await page.getByLabel('Development key').fill('tangle-browser-test-key-not-a-secret')
@@ -25,6 +66,7 @@ test('create sticky, tie cards and move a card persistently', async ({ page }) =
   await page.goto('/')
   await page.getByLabel('Development key').fill('tangle-browser-test-key-not-a-secret')
   await page.getByRole('button', { name: 'Unlock Tangle' }).click()
+  await page.getByRole('button', { name: 'New sticky', exact: true }).click()
   await page.getByLabel('New sticky title').fill('Customer demo')
   await page.getByRole('button', { name: 'Create sticky' }).click()
   await expect(page.getByLabel('Sticky title')).toHaveValue('Customer demo')

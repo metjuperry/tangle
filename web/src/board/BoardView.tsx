@@ -142,7 +142,7 @@ function layout(board: Board): { nodes: (Zone | PrNode | StickyNodeType)[]; edge
       nodes.push({ id, type: stack ? 'stack' : members.length > 1 ? 'batch' : 'pr', parentId: zoneId, extent: 'parent',
         position: { x: 24 + (i % columns) * 200, y: 56 + rowHeights.slice(0, Math.floor(i / columns)).reduce((sum, h) => sum + h, 0) },
         data: { card: members[0], members, stack },
-        style: { width: 176, height: stack ? 92 + members.length * 142 : 110 }, draggable: !stack, selectable: false })
+        style: { width: 176, height: stack ? 92 + members.length * 142 : 110, pointerEvents: 'all' }, draggable: !stack, selectable: false })
       const node = nodes[nodes.length - 1]
       const saved = board.positions?.find(p => p.nodeRef === `pr:${members[0].id}`)
       if (saved) node.position = { x: saved.x, y: saved.y }
