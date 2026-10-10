@@ -18,6 +18,8 @@ The on-demand worker runs after successful sync, never on a schedule. Monthly US
 
 Settings is organized into bordered sections for owners, repository permissions, AI privacy/budget, bot detection and recent calls. Each repo has independently labelled Watch and Allow AI controls; the page has one save bar at the bottom. No permission is changed just by this layout update.
 
+Call history now records the job, assessed PR/pairs, and outcome (verdict or number of new suggested strings). PR assessments link to their card. Forward migration 0005 recovers prior verdict outcomes where their input hash matches; older pair calls without stored targets remain explicitly unidentified rather than guessed. This improvement makes no provider calls.
+
 ```sh
 cd web
 npm ci

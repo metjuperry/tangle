@@ -38,7 +38,7 @@ public sealed class AiWorker(IAiStore store, HaikuDecider decider, ILiveEvents e
             var hash = Hash("verdict", pr);
             if (await store.CachedAsync(hash, ct)) continue;
             // Reserve a conservative bound before any provider call; unresolved calls retain the reservation.
-            var reservation = await store.ReserveAsync(hash, decider.Name, .02m, ct);
+            var reservation = await store.ReserveAsync(hash, decider.Name, .02m, ct, "verdict", [pr.Ref]);
             if (reservation is null) { events.Publish("ai.budget", new { reached = true }); return; }
             try
             {
@@ -70,7 +70,8 @@ public sealed class AiWorker(IAiStore store, HaikuDecider decider, ILiveEvents e
             if (batch.Any(p => !currentRefs.Contains(p.ARef) || !currentRefs.Contains(p.BRef) ||
                 current.ExistingPairs.Any(e => e.ARef == p.ARef && e.BRef == p.BRef) ||
                 !currentPairs.Any(fresh => fresh.ARef == p.ARef && fresh.BRef == p.BRef && Hash("pairs", fresh) == Hash("pairs", p)))) continue;
-            var reservation = await store.ReserveAsync(hash, decider.Name, .20m, ct);
+            var reservation = await store.ReserveAsync(hash, decider.Name, .20m, ct, "pairs",
+                batch.Select(p => $"{p.ARef} ↔ {p.BRef}").ToArray());
             if (reservation is null) { events.Publish("ai.budget", new { reached = true }); return; }
             try
             {

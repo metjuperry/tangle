@@ -12,11 +12,13 @@ type Owner = { id: string; kind: 'org' | 'user'; watched: boolean }
 type Repo = { id: string; watched: boolean; aiAllowed: boolean }
 type Settings = { owners: Owner[]; repos: Repo[]; botLogins: string[]; aiBudget: number }
 type SyncResult = { fetched: number; changed: number; calls: number; cost: number }
+type AiCall = { cost: number; reservedCost: number; status: string; error: string | null; createdAt: string; job: string | null;
+  targets: string | null; outcome: string | null; prId: string | null; inputTokens: number; outputTokens: number; latencyMs: number }
 const queries = new QueryClient()
 function SettingsPage() {
   const queryClient = useQueryClient()
   const settings = useQuery({ queryKey: ['settings'], queryFn: () => api<Settings>('/api/settings') })
-  const aiStatus = useQuery({ queryKey: ['ai'], queryFn: () => api<{ enabled: boolean; calls: { cost: number; status: string; error: string | null; created_at: string }[] }>('/api/ai/status') })
+  const aiStatus = useQuery({ queryKey: ['ai'], queryFn: () => api<{ enabled: boolean; calls: AiCall[] }>('/api/ai/status') })
   const [draft, setDraft] = useState<Settings | null>(null)
   const [owner, setOwner] = useState('')
   const [kind, setKind] = useState<'org' | 'user'>('org')
@@ -68,7 +70,13 @@ function SettingsPage() {
     </section>
     <section className="settings-section" aria-labelledby="calls-heading"><h2 id="calls-heading">Recent AI calls</h2>{aiStatus.error && <p role="alert">{aiStatus.error.message}</p>}
     {aiStatus.data?.calls.length === 0 && <p className="quiet">No provider calls recorded.</p>}
-    {aiStatus.data?.calls.map((call, i) => <p className="ai-call-row" key={i}>{call.status} · ${call.cost.toFixed(6)} · {call.error ?? call.created_at}</p>)}</section>
+    {aiStatus.data?.calls.map((call, i) => <article className="ai-call-row" key={i}>
+      <div className="ai-call-heading"><b>{call.job === 'verdict' ? 'PR next-step assessment' : call.job === 'pairs' ? 'Relationship assessment' : 'Earlier AI call'}</b><span>{call.status}</span></div>
+      {call.prId && <a href={`/?pr=${encodeURIComponent(call.prId)}`}>{call.prId} · View card</a>}
+      <p>{call.error ? `Failed: ${call.error}` : call.outcome ?? (call.status === 'reserved' ? 'Waiting for completion; usage may be unknown.' : 'Details were not recorded for this earlier call.')}</p>
+      {call.targets && <details><summary>What was assessed</summary><ul>{(JSON.parse(call.targets) as string[]).map(target => <li key={target}>{target.replaceAll('pr:', '')}</li>)}</ul></details>}
+      <small>{new Date(call.createdAt).toLocaleString()} · ${call.cost.toFixed(6)}{call.status === 'reserved' && ` · $${call.reservedCost.toFixed(2)} budget reserved`} · {call.inputTokens} input / {call.outputTokens} output tokens · {call.latencyMs} ms</small>
+    </article>)}</section>
     <footer className="settings-save"><span>Changes apply only when you save.</span><button disabled={save.isPending} onClick={() => save.mutate(value)}>{save.isPending ? 'Saving…' : 'Save settings'}</button>
     {save.error && <p role="alert">{save.error.message}</p>}{save.isSuccess && <p role="status">Settings saved.</p>}</footer>
   </section>
@@ -81,6 +89,11 @@ function Workspace() {
   const status = useLiveEvents()
   const dimOthers = useBoardUi(s => s.dimOthers)
   const toggleOthers = useBoardUi(s => s.toggleOthers)
+  const selectCard = useBoardUi(s => s.select)
+  useEffect(() => {
+    const pr = new URLSearchParams(window.location.search).get('pr')
+    if (path === '/' && pr) selectCard(pr)
+  }, [path, selectCard])
   const attemptedAutoSync = useRef(false)
   const sync = useMutation({
     mutationFn: () => api<SyncResult>('/api/sync', { method: 'POST' }),

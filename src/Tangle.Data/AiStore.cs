@@ -42,7 +42,8 @@ public sealed class AiStore(Database database, SyncStore sync, AuthoringStore au
         await using var db = await database.OpenAsync(ct);
         return await db.ExecuteScalarAsync<int>(new CommandDefinition("SELECT COUNT(*) FROM ai_cache WHERE input_hash=@hash", new { hash }, cancellationToken: ct)) > 0;
     }
-    public async Task<AiReservation?> ReserveAsync(string hash, string decider, decimal maximumCost, CancellationToken ct)
+    public async Task<AiReservation?> ReserveAsync(string hash, string decider, decimal maximumCost, CancellationToken ct,
+        string? job = null, IReadOnlyList<string>? targets = null)
     {
         await using var db = await database.OpenAsync(ct);
         using var tx = db.BeginTransaction(deferred: false);
@@ -56,9 +57,10 @@ public sealed class AiStore(Database database, SyncStore sync, AuthoringStore au
         if (used + maximumCost > budget) return null;
         var id = Guid.NewGuid().ToString();
         await db.ExecuteAsync(new CommandDefinition("""
-            INSERT INTO ai_call(id,decider,input_hash,input_tokens,output_tokens,cost,latency_ms,created_at,status,reserved_cost)
-            VALUES(@id,@decider,@hash,0,0,0,0,@at,'reserved',@maximumCost)
-            """, new { id, decider, hash, at = clock.GetUtcNow().ToString("O"), maximumCost }, tx, cancellationToken: ct));
+            INSERT INTO ai_call(id,decider,input_hash,input_tokens,output_tokens,cost,latency_ms,created_at,status,reserved_cost,job,targets)
+            VALUES(@id,@decider,@hash,0,0,0,0,@at,'reserved',@maximumCost,@job,@targets)
+            """, new { id, decider, hash, at = clock.GetUtcNow().ToString("O"), maximumCost, job,
+                targets = targets is null ? null : JsonSerializer.Serialize(targets) }, tx, cancellationToken: ct));
         tx.Commit();
         return new(id, hash);
     }
@@ -68,18 +70,23 @@ public sealed class AiStore(Database database, SyncStore sync, AuthoringStore au
         await using var db = await database.OpenAsync(ct);
         using var tx = db.BeginTransaction();
         var at = clock.GetUtcNow().ToString("O");
+        var savedVerdict = false;
+        var suggested = 0;
         if (pr is not null && verdict is not null && await Allowed(db, tx, pr.Ref, ct))
+        {
             await db.ExecuteAsync(new CommandDefinition("""
                 INSERT INTO verdict(pr_id,decider,action,confidence,reason,intent,priority,input_hash,created_at)
                 VALUES(@id,'haiku-5-5',@action,@Confidence,@Reason,@Intent,@Priority,@hash,@at)
                 ON CONFLICT(pr_id,decider,input_hash) DO NOTHING
                 """, new { id = pr.Ref[3..], action = verdict.Action.ToString().ToLowerInvariant(), verdict.Confidence, verdict.Reason,
                     verdict.Intent, verdict.Priority, hash = reservation.InputHash, at }, tx, cancellationToken: ct));
+            savedVerdict = true;
+        }
         foreach (var link in links ?? [])
         {
             if (link.Related <= .75 || !await Allowed(db, tx, link.ARef, ct) || !await Allowed(db, tx, link.BRef, ct)) continue;
             var (a, b) = string.CompareOrdinal(link.ARef, link.BRef) < 0 ? (link.ARef, link.BRef) : (link.BRef, link.ARef);
-            await db.ExecuteAsync(new CommandDefinition("""
+            suggested += await db.ExecuteAsync(new CommandDefinition("""
                 INSERT INTO link(id,a_ref,b_ref,source,status,confidence,reason,created_at)
                 VALUES(@id,@a,@b,'ai','suggested',@Related,@Reason,@at) ON CONFLICT(a_ref,b_ref) DO NOTHING
                 """, new { id = Guid.NewGuid().ToString(), a, b, link.Related, link.Reason, at }, tx, cancellationToken: ct));
@@ -87,6 +94,11 @@ public sealed class AiStore(Database database, SyncStore sync, AuthoringStore au
         await db.ExecuteAsync(new CommandDefinition("INSERT INTO ai_cache VALUES(@hash,@at) ON CONFLICT(input_hash) DO NOTHING",
             new { hash = reservation.InputHash, at }, tx, cancellationToken: ct));
         await Complete(db, tx, reservation, usage, "completed", null, ct);
+        var outcome = verdict is not null
+            ? savedVerdict ? $"{verdict.Action.ToString().ToLowerInvariant()}: {verdict.Reason}" : "Verdict not saved: repository permission or PR state changed."
+            : $"Assessed {links?.Count ?? 0} candidate pairs; created {suggested} suggested strings.";
+        await db.ExecuteAsync(new CommandDefinition("UPDATE ai_call SET pr_id=@prId,outcome=@outcome WHERE id=@id",
+            new { prId = pr?.Ref[3..], outcome, id = reservation.Id }, tx, cancellationToken: ct));
         tx.Commit();
     }
     private static async Task<bool> Allowed(Microsoft.Data.Sqlite.SqliteConnection db, Microsoft.Data.Sqlite.SqliteTransaction tx, string reference, CancellationToken ct)

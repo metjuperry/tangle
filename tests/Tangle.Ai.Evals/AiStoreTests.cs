@@ -50,6 +50,9 @@ public sealed class AiStoreTests : IDisposable
         Assert.Null(await store.ReserveAsync("second", "haiku-5-5", .02m, default));
         var pr = (await store.SnapshotAsync(default)).Prs[0];
         await store.FinishAsync(reservation!, new(100, 20, .001m, 30), pr, new(NextAction.Fix, .9, 3, "reason", "intent"), null, default);
+        await using var db = await database.OpenAsync();
+        Assert.Equal("fix: reason", await db.ExecuteScalarAsync<string>("SELECT outcome FROM ai_call WHERE id=@id", new { id = reservation!.Id }));
+        Assert.Equal(pr.Ref[3..], await db.ExecuteScalarAsync<string>("SELECT pr_id FROM ai_call WHERE id=@id", new { id = reservation.Id }));
         Assert.True(await store.CachedAsync("hash", default));
         Assert.Equal("fix", (await sync.GetBoardAsync()).First(c => c.Id == pr.Ref[3..]).Verdict!.Action);
     }

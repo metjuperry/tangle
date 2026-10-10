@@ -73,7 +73,11 @@ public static partial class SyncEndpoints
         {
             await using var db = await database.OpenAsync(ct);
             var calls = await Dapper.SqlMapper.QueryAsync(db, new Dapper.CommandDefinition(
-                "SELECT decider,input_tokens,output_tokens,cost,latency_ms,status,error,created_at FROM ai_call ORDER BY created_at DESC LIMIT 50", cancellationToken: ct));
+                """
+                SELECT decider,input_tokens AS inputTokens,output_tokens AS outputTokens,cost,latency_ms AS latencyMs,
+                  status,error,created_at AS createdAt,job,targets,outcome,pr_id AS prId,reserved_cost AS reservedCost
+                FROM ai_call ORDER BY created_at DESC LIMIT 50
+                """, cancellationToken: ct));
             return Results.Ok(new { enabled = config.GetValue<bool>("Ai:Enabled"), calls });
         });
     }

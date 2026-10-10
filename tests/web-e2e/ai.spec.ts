@@ -1,5 +1,24 @@
 import { test, expect } from '../../web/node_modules/@playwright/test'
 
+test('call history explains work and links to the assessed PR', async ({ page }) => {
+  await page.route('**/api/ai/status', route => route.fulfill({ json: { enabled: true, calls: [{
+    job: 'verdict', prId: 'example/repo#49', targets: '["pr:example/repo#49"]',
+    outcome: 'fix: Reply to four review asks.', status: 'completed', error: null,
+    createdAt: '2026-10-10T12:00:00Z', cost: .001, reservedCost: .02, inputTokens: 100, outputTokens: 40, latencyMs: 50,
+  }, {
+    job: 'pairs', targets: '["pr:example/repo#49 ↔ pr:example/tools#195"]',
+    outcome: 'Assessed 1 candidate pairs; created 0 suggested strings.', status: 'completed', error: null,
+    createdAt: '2026-10-10T12:00:00Z', cost: .001, reservedCost: .2, inputTokens: 100, outputTokens: 40, latencyMs: 50,
+  }] } }))
+  await page.goto('/settings')
+  await page.getByLabel('Development key').fill('tangle-browser-test-key-not-a-secret')
+  await page.getByRole('button', { name: 'Unlock Tangle' }).click()
+  await expect(page.getByText('fix: Reply to four review asks.')).toBeVisible()
+  await expect(page.getByText('Assessed 1 candidate pairs; created 0 suggested strings.')).toBeVisible()
+  await page.getByRole('link', { name: 'example/repo#49 · View card' }).click()
+  await expect(page.getByRole('heading', { name: 'Open asks · 4' })).toBeVisible()
+})
+
 test('AI verdict and suggested string display as proposals, tie and cut stay human actions', async ({ page }) => {
   await page.route('**/api/board', async route => {
     const response = await route.fetch()

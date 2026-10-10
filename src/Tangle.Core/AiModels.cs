@@ -29,7 +29,8 @@ public interface IAiStore
 {
     Task<AiSnapshot> SnapshotAsync(CancellationToken ct);
     Task<bool> CachedAsync(string hash, CancellationToken ct);
-    Task<AiReservation?> ReserveAsync(string hash, string decider, decimal maximumCost, CancellationToken ct);
+    Task<AiReservation?> ReserveAsync(string hash, string decider, decimal maximumCost, CancellationToken ct,
+        string? job = null, IReadOnlyList<string>? targets = null);
     Task FinishAsync(AiReservation reservation, AiUsage usage, PrContext? pr, PrJudgment? verdict,
         IReadOnlyList<LinkJudgment>? links, CancellationToken ct);
     Task FailAsync(AiReservation reservation, string error, AiUsage? usage, CancellationToken ct);
