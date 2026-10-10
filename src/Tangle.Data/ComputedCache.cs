@@ -101,15 +101,17 @@ public sealed partial class SyncStore
                 tx, cancellationToken: ct));
     }
 
-    public async Task<IReadOnlyList<BoardString>> GetStringsAsync(CancellationToken ct = default)
+    public async Task<IReadOnlyList<BoardString>> GetStringsAsync(CancellationToken ct = default, bool includeCut = false)
     {
         var cards = await GetBoardAsync(ct: ct);
         var visible = cards.Select(c => $"pr:{c.Id}").ToHashSet(StringComparer.Ordinal);
         await using var db = await database.OpenAsync(ct);
+        var stickies = await db.QueryAsync<string>(new CommandDefinition("SELECT id FROM sticky WHERE archived_at IS NULL", cancellationToken: ct));
+        visible.UnionWith(stickies.Select(id => $"sticky:{id}"));
         var links = await db.QueryAsync<BoardString>(new CommandDefinition("""
             SELECT id AS Id,a_ref AS ARef,b_ref AS BRef,source AS Source,rule AS Rule,status AS Status,
-              reason AS Reason,label AS Label FROM link WHERE status<>'cut' ORDER BY id
-            """, cancellationToken: ct));
+              reason AS Reason,label AS Label FROM link WHERE @includeCut=1 OR status<>'cut' ORDER BY id
+            """, new { includeCut }, cancellationToken: ct));
         return links.Where(l => visible.Contains(l.ARef) && visible.Contains(l.BRef)).ToArray();
     }
 }

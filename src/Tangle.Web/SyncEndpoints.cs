@@ -43,13 +43,15 @@ public static partial class SyncEndpoints
                 return Results.Json(new { error = e.Message }, statusCode: StatusCodes.Status502BadGateway);
             }
         });
-        api.MapGet("/board", async (SyncStore store, CancellationToken ct) =>
+        api.MapGet("/board", async (SyncStore store, AuthoringStore authoring, CancellationToken ct) =>
         {
             var cards = await store.GetBoardAsync(ct: ct);
+            var own = await authoring.GetAsync(ct);
             return Results.Ok(new { zones = cards.Select(c => c.RepoId).Distinct(), cards,
                 batches = cards.Where(c => c.BatchId is not null).GroupBy(c => c.BatchId)
                     .Select(g => new { id = g.Key, repoId = g.First().RepoId, prIds = g.Select(c => c.Id) }),
-                stickies = Array.Empty<object>(), strings = await store.GetStringsAsync(ct), positions = Array.Empty<object>(),
+                stickies = own.Stickies, notes = own.Notes, strings = await store.GetStringsAsync(ct), positions = own.Positions,
+                cutStrings = (await store.GetStringsAsync(ct, includeCut: true)).Where(l => l.Status == "cut"),
                 lastSyncAt = await store.GetLastSyncAsync(ct) });
         });
         api.MapGet("/prs/{owner}/{repo}/{number:int}", async (string owner, string repo, int number, SyncStore store, CancellationToken ct) =>

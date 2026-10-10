@@ -45,6 +45,14 @@ a { color: var(--yarn); }
 .stamp { position: absolute; bottom: 7px; right: 7px; transform: rotate(-7deg); border: 2px solid #5e564b; color: #5e564b; font-size: 9px; font-weight: 700; letter-spacing: .08em; padding: 1px 4px; border-radius: 3px; background: #fbf6ead9; }
 .turn-me .stamp { color: #c2410c; border-color: #c2410c; }
 .react-flow__handle { width: 1px; height: 1px; min-width: 1px; min-height: 1px; opacity: 0; top: 2px; }
+.pr-card > .react-flow__handle, .sticky-node > .react-flow__handle { width: 16px; height: 16px; opacity: 1; top: -6px; border-radius: 50%; z-index: 6; background: var(--pin,var(--pin-me)); border: 0; }
+.pr-card > .react-flow__handle.source, .sticky-node > .react-flow__handle.source { transform: translate(0,-50%); left: 50%; width: 8px; }
+.pr-card > .react-flow__handle.target, .sticky-node > .react-flow__handle.target { transform: translate(-100%,-50%); left: 50%; width: 8px; }
+.tie-target { outline: 3px solid var(--mine-yarn); }
+.tie-banner { position: absolute; top: 0; z-index: 40; background: var(--mine-yarn); color: var(--paper); padding: 10px 16px; width: 100%; }.tie-banner button { margin-left: 12px; }
+.handwriting { font-family: Caveat,cursive; font-size: 24px; color: var(--mine-yarn); white-space: pre-wrap; overflow-wrap: anywhere; }
+.side-panel form { display: grid; gap: 8px; margin: 16px 0; }.side-panel label { display: grid; gap: 4px; font-size: 13px; }.side-panel input,.side-panel textarea,.side-panel select { max-width: 100%; padding: 8px; font: inherit; }.side-panel button { padding: 8px; }
+.sticky-node { width: 180px; height: 130px; background: #f6e690; box-shadow: 0 3px 8px #221c1550; position: relative; }.sticky-blue { background: #c6def2; }.sticky-pink { background: #f2c9d2; }.sticky-green { background: #d2e6b8; }.sticky-button { width: 100%; height: 100%; border: 0; background: transparent; padding: 16px; display: flex; flex-direction: column; gap: 10px; text-align: left; }.sticky-knots { display: flex; flex-wrap: wrap; gap: 4px; }.sticky-knots i { width: 10px; height: 10px; border: 2px solid var(--mine-yarn); border-radius: 50%; }.sticky-knots .filled { background: var(--mine-yarn); }
 .react-flow__edgelabel-renderer { z-index: 30; }
 .yarn-tag { position: absolute; pointer-events: all; display: grid; place-items: center; width: 28px; height: 28px; border: 2px solid var(--yarn); border-radius: 50%; color: var(--paper); background: var(--yarn); font-size: 15px; line-height: 1; font-weight: 700; padding: 0; box-shadow: 0 2px 4px #28140059; }
 .board-legend { position: absolute; z-index: 25; left: 20px; bottom: 20px; right: 20px; width: fit-content; max-width: calc(100% - 40px); display: flex; flex-wrap: wrap; gap: 8px 18px; padding: 8px 14px; border-radius: 4px; background: #fbf6eaeb; box-shadow: 0 2px 4px #2814004d; font-size: 11px; color: #3b342b; pointer-events: none; }

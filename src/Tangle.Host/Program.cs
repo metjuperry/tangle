@@ -20,6 +20,7 @@ builder.Services.AddSingleton(services => new Database(services.GetRequiredServi
 builder.Services.AddLocalAuthentication();
 builder.Services.AddSingleton<TimeProvider>(TimeProvider.System);
 builder.Services.AddSingleton<SyncStore>();
+builder.Services.AddSingleton<AuthoringStore>();
 builder.Services.AddSingleton<ISyncStore>(services => services.GetRequiredService<SyncStore>());
 builder.Services.AddSingleton<GitHubTokens>();
 builder.Services.AddHttpClient<IGitHubReader, GitHubReader>();
@@ -33,6 +34,7 @@ await app.Services.GetRequiredService<SyncStore>().RecomputeAsync();
 app.UseLocalAuthentication(app.Services.GetRequiredService<RuntimeSettings>());
 app.MapGet("/healthz", () => Results.Ok(new { status = "ok" }));
 app.MapSyncEndpoints();
+app.MapAuthoringEndpoints();
 app.MapWebShell();
 app.Run();
 
