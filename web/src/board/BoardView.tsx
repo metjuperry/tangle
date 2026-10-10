@@ -125,7 +125,7 @@ function layout(board: Board): { nodes: (Zone | PrNode | StickyNodeType)[]; edge
   const nodes: (Zone | PrNode | StickyNodeType)[] = []
   const mapped = new Map<string, string>()
   const repos = [...new Set(board.cards.map(p => p.repoId))].sort()
-  let x = 24, rowHeight = 0
+  let x = 24
   const y = 36
   for (const repo of repos) {
     const cards = board.cards.filter(p => p.repoId === repo)
@@ -161,12 +161,27 @@ function layout(board: Board): { nodes: (Zone | PrNode | StickyNodeType)[]; edge
       if (saved) node.position = { x: saved.x, y: saved.y }
       members.forEach(p => mapped.set(`pr:${p.id}`, id))
     })
-    x += width + 36; rowHeight = Math.max(rowHeight, height)
+    x += width + 36
   }
+  const zones = nodes.filter((node): node is Zone => node.type === 'zone')
+  const repoRows = Math.min(3, zones.length)
+  const heights = Array.from({ length: repoRows }, (_, row) =>
+    Math.max(...zones.filter((_, index) => index % repoRows === row).map(zone => zone.data.height)))
+  const widths = Array.from({ length: Math.ceil(zones.length / 3) }, (_, column) =>
+    Math.max(...zones.slice(column * 3, column * 3 + 3).map(zone => zone.data.width)))
+  zones.forEach((zone, index) => {
+    const row = index % repoRows
+    const column = Math.floor(index / repoRows)
+    zone.position = {
+      x: 24 + widths.slice(0, column).reduce((sum, width) => sum + width + 36, 0),
+      y: 36 + heights.slice(0, row).reduce((sum, height) => sum + height + 36, 0),
+    }
+  })
+  const boardBottom = zones.reduce((bottom, zone) => Math.max(bottom, zone.position.y + zone.data.height), 36)
   for (const [index, sticky] of (board.stickies ?? []).entries()) {
     const id = `sticky:${sticky.id}`
     const saved = board.positions?.find(p => p.nodeRef === id)
-    nodes.push({ id, type: 'sticky', position: saved ? { x: saved.x, y: saved.y } : { x: 30 + index * 210, y: y + rowHeight + 50 },
+    nodes.push({ id, type: 'sticky', position: saved ? { x: saved.x, y: saved.y } : { x: 30 + index * 210, y: boardBottom + 50 },
       data: { sticky }, style: { width: 180, height: 130 }, draggable: true })
     mapped.set(id, id)
   }
