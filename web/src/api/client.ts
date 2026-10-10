@@ -1,0 +1,15 @@
+export type Facts = { turn: 'me' | 'them' | 'nobody'; turnReason: string; ageDays: number; idleDays: number; behindBy: number | null; conflicting: boolean; size: string; origin: string }
+export type Card = { id: string; repoId: string; number: number; title: string; author: string | null; isMine: boolean; state: string; isDraft: boolean; createdAt: string; updatedAt: string; facts: Facts | null; batchId: string | null }
+export type Yarn = { id: string; aRef: string; bRef: string; source: 'rule' | 'ai' | 'me'; status: string; rule: string | null; reason: string | null; label: string | null }
+export type Board = { cards: Card[]; strings: Yarn[]; lastSyncAt: string | null }
+export type Context = { card: Card; body: string; threads: { id: string; path: string | null; lastActor: string | null; lastAt: string | null; excerpt: string | null }[]; events: { at: string; actor: string | null; kind: string }[]; strings: Yarn[] }
+export const turnLabel = (turn?: string) => turn === 'me' ? 'Your turn' : turn === 'nobody' ? "Nobody’s turn" : 'Waiting on others'
+
+export async function api<T>(path: string, init?: RequestInit): Promise<T> {
+  const response = await fetch(path, init)
+  if (!response.ok) {
+    const body: { error?: string } = await response.json()
+    throw new Error(body.error ?? `Request failed (${response.status}).`)
+  }
+  return response.json() as Promise<T>
+}

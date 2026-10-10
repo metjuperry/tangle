@@ -74,7 +74,7 @@ public sealed class HostTests(TangleFactory factory) : IClassFixture<TangleFacto
     public async Task SettingsBoardAndSyncRequireAuthentication()
     {
         using var client = factory.LocalClient();
-        foreach (var path in new[] { "/api/settings", "/api/board", "/api/debug/prs" })
+        foreach (var path in new[] { "/api/settings", "/api/board", "/api/events", "/api/prs/example/repo/1" })
             Assert.Equal(HttpStatusCode.Unauthorized, (await client.GetAsync(path)).StatusCode);
         Assert.Equal(HttpStatusCode.Unauthorized, (await client.PostAsync("/api/sync", null)).StatusCode);
     }
@@ -100,7 +100,7 @@ public sealed class HostTests(TangleFactory factory) : IClassFixture<TangleFacto
     }
 
     [Fact]
-    public async Task BoardAndDebugExposeFactsBatchesAndStrings()
+    public async Task BoardAndCardContextExposeFactsBatchesAndStrings()
     {
         using var isolated = new TangleFactory();
         using var client = isolated.LocalClient();
@@ -118,6 +118,9 @@ public sealed class HostTests(TangleFactory factory) : IClassFixture<TangleFacto
         Assert.Equal("me", board["cards"]![0]!["facts"]!["turn"]!.GetValue<string>());
         Assert.Single(board["batches"]!.AsArray());
         Assert.Single(board["strings"]!.AsArray());
-        Assert.Contains("1 open review comment", await client.GetStringAsync("/api/debug/prs"));
+        Assert.Contains("1 open review comment", await client.GetStringAsync("/api/prs/fixture/repo/1"));
+        Assert.Equal(HttpStatusCode.NotFound, (await client.GetAsync("/api/prs/fixture/repo/999")).StatusCode);
+        Assert.Equal(HttpStatusCode.NotFound, (await client.GetAsync("/debug/prs")).StatusCode);
+        Assert.Equal(HttpStatusCode.NotFound, (await client.GetAsync("/api/debug/prs")).StatusCode);
     }
 }

@@ -1,23 +1,17 @@
-import { useEffect, useState } from 'react'
+import { useEffect, useRef, useState } from 'react'
 import { QueryClient, QueryClientProvider, useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 import './App.css'
+import { api, type Board } from './api/client'
+import { BoardView } from './board/BoardView'
+import { SidePanel } from './card/SidePanel'
+import { useBoardUi } from './board/store'
+import { useLiveEvents } from './api/events'
 
 type Owner = { id: string; kind: 'org' | 'user'; watched: boolean }
 type Repo = { id: string; watched: boolean; aiAllowed: boolean }
 type Settings = { owners: Owner[]; repos: Repo[]; botLogins: string[] }
-type Facts = { turn: string; turnReason: string; ageDays: number; idleDays: number; behindBy: number | null; conflicting: boolean; size: string; origin: string }
-type Card = { id: string; repoId: string; number: number; title: string; author: string | null; isMine: boolean; state: string; isDraft: boolean; updatedAt: string; facts: Facts | null; batchId: string | null }
-type Board = { cards: Card[]; strings: { id: string; aRef: string; bRef: string; rule: string; reason: string }[] }
 type SyncResult = { fetched: number; changed: number; calls: number; cost: number }
 const queries = new QueryClient()
-async function api<T>(path: string, init?: RequestInit): Promise<T> {
-  const response = await fetch(path, init)
-  if (!response.ok) {
-    const body: { error?: string } = await response.json()
-    throw new Error(body.error ?? `Request failed (${response.status}).`)
-  }
-  return response.json() as Promise<T>
-}
 function SettingsPage() {
   const queryClient = useQueryClient()
   const settings = useQuery({ queryKey: ['settings'], queryFn: () => api<Settings>('/api/settings') })
@@ -34,7 +28,7 @@ function SettingsPage() {
   })
   if (settings.error) return <p role="alert">{settings.error.message}</p>
   if (!value) return <p>Loading settings…</p>
-  return <section><h1>Settings</h1><p>Tokens belong in user-secrets or your environment, never here. AI remains off until M5.</p>
+  return <section className="settings-page"><h1>Settings</h1><p>Tokens belong in user-secrets or your environment, never here. AI remains off until M5.</p>
     <h2>Watched owners</h2>
     {value.owners.map((o, i) => <label key={o.id}><span><input type="checkbox" checked={o.watched}
       onChange={e => setDraft({ ...value, owners: value.owners.map((item, j) => j === i ? { ...item, watched: e.target.checked } : item) })} /> {o.id} ({o.kind})</span></label>)}
@@ -55,31 +49,39 @@ function SettingsPage() {
     {save.error && <p role="alert">{save.error.message}</p>}{save.isSuccess && <p role="status">Settings saved.</p>}
   </section>
 }
-function PrTable({ cards }: { cards: Card[] }) {
-  return <table><thead><tr><th>PR</th><th>Title</th><th>Author</th><th>State</th><th>Turn</th><th>Reason</th><th>Age / idle days</th><th>Size / origin</th><th>Batch</th><th>Updated</th></tr></thead>
-    <tbody>{cards.map(c => <tr key={c.id}><td><a href={`https://github.com/${c.repoId}/pull/${c.number}`} rel="noreferrer" target="_blank">{c.id}</a></td>
-      <td>{c.title}{c.isDraft && ' (draft)'}</td><td>{c.author}{c.isMine && ' (you)'}</td><td>{c.state}</td>
-      <td>{c.facts?.turn ?? 'not computed'}</td><td>{c.facts?.turnReason}</td><td>{c.facts && `${c.facts.ageDays} / ${c.facts.idleDays}`}</td>
-      <td>{c.facts && `${c.facts.size} / ${c.facts.origin}`}</td><td>{c.batchId ? c.batchId.slice(0, 18) : '—'}</td><td>{c.updatedAt}</td></tr>)}</tbody></table>
-}
 function Workspace() {
   const queryClient = useQueryClient()
   const path = window.location.pathname
   const board = useQuery({ queryKey: ['board'], queryFn: () => api<Board>('/api/board') })
-  const debug = useQuery({ queryKey: ['debug'], queryFn: () => api<Card[]>('/api/debug/prs'), enabled: path === '/debug/prs' })
+  const status = useLiveEvents()
+  const dimOthers = useBoardUi(s => s.dimOthers)
+  const toggleOthers = useBoardUi(s => s.toggleOthers)
+  const attemptedAutoSync = useRef(false)
   const sync = useMutation({
     mutationFn: () => api<SyncResult>('/api/sync', { method: 'POST' }),
-    onSuccess: async () => { await queryClient.invalidateQueries({ queryKey: ['board'] }); await queryClient.invalidateQueries({ queryKey: ['debug'] }); await queryClient.invalidateQueries({ queryKey: ['settings'] }) },
+    onSuccess: async () => { await queryClient.invalidateQueries({ queryKey: ['board'] }); await queryClient.invalidateQueries({ queryKey: ['pr'] }); await queryClient.invalidateQueries({ queryKey: ['settings'] }) },
   })
-  return <><nav><a href="/">Board</a> · <a href="/settings">Settings</a> · <a href="/debug/prs">Debug PRs</a> <button disabled={sync.isPending} onClick={() => sync.mutate()}>{sync.isPending ? 'Syncing…' : 'Sync'}</button></nav>
-    {sync.error && <p role="alert">{sync.error.message}</p>}{sync.data && <p role="status">Synced {sync.data.fetched} PRs; {sync.data.changed} changed; {sync.data.cost} search points.</p>}
-    {path === '/settings' ? <SettingsPage /> : <section className="backlog"><h1>{path === '/debug/prs' ? 'Stored pull requests' : 'Your yarn board'}</h1>
-      <p>The React Flow board arrives in M3. This milestone shows synced data as a plain table.</p>
-      {(board.error ?? debug.error) && <p role="alert">{(board.error ?? debug.error)?.message}</p>}
-      {board.isPending ? <p>Loading pull requests…</p> : board.data?.cards.length === 0 ? <p>No pull requests synced yet.</p> : <PrTable cards={path === '/debug/prs' ? debug.data ?? [] : board.data?.cards ?? []} />}
-      <h2>Rule strings</h2>{board.data?.strings.length === 0 ? <p>No rule strings found.</p> :
-        <ul>{board.data?.strings.map(s => <li key={s.id}>{s.aRef} ↔ {s.bRef}: {s.rule} — {s.reason}</li>)}</ul>}
-    </section>}</>
+  const mutate = sync.mutate
+  useEffect(() => {
+    if (path !== '/' || !board.data || attemptedAutoSync.current) return
+    attemptedAutoSync.current = true
+    if (!board.data.lastSyncAt || Date.now() - Date.parse(board.data.lastSyncAt) > 10 * 60 * 1000) mutate()
+  }, [board.data, path, mutate])
+  const mine = board.data?.cards.filter(p => p.isMine).length ?? 0
+  const others = (board.data?.cards.length ?? 0) - mine
+  return <><header className="top-bar"><a className="brand" href="/" aria-label="Tangle board"><svg width="30" height="30" viewBox="0 0 30 30" fill="none" aria-hidden="true"><path d="M4 22C10 4 22 4 18 14S6 16 15 11 28 14 26 24" /></svg>tangle</a>
+    <nav className="view-switch"><a href="/" aria-current={path === '/' ? 'page' : undefined}>Board</a><span title="Arrives in M6">Untangle</span></nav>
+    <div className="header-counts"><span><b>{mine}</b> yours</span><span><b>{others}</b> around you</span><span><b>{board.data?.strings.length ?? 0}</b> strings</span></div>
+    <div className="header-spacer" /><span className="knot-meter">Untied 0 of {mine}<span aria-hidden="true" className="knots">{Array.from({ length: Math.min(mine, 20) }, (_, i) => <i key={i} />)}</span></span>
+    <button className="header-button" aria-pressed={dimOthers} onClick={toggleOthers}>{dimOthers ? 'Show others’ PRs' : 'Dim others’ PRs'}</button>
+    <button className="header-button" disabled={sync.isPending} onClick={() => sync.mutate()}>{sync.isPending ? 'Syncing…' : 'Sync'}</button><a className="header-button" href="/settings">Settings</a></header>
+    {(status || sync.error) && <div className={`notice ${sync.error ? 'notice-error' : ''}`} role={sync.error ? 'alert' : 'status'}>{sync.error?.message ?? status}</div>}
+    {path === '/settings' ? <main className="settings-wrap"><SettingsPage /></main> :
+      path !== '/' ? <main className="settings-wrap"><h1>Page not found</h1><a href="/">Back to the board</a></main> :
+      board.error ? <main className="settings-wrap"><p role="alert">{board.error.message}</p></main> :
+      board.data ? <main className="board-workspace"><BoardView board={board.data} /><SidePanel board={board.data} />
+        {board.data.cards.length === 0 && <div className="board-empty"><h1>Your yarn board</h1><p>No pull requests synced yet.</p><a href="/settings">Choose watched repositories</a></div>}</main> :
+      <main className="settings-wrap"><p role="status">Loading your board…</p></main>}</>
 }
 function Shell() {
   const [authenticated, setAuthenticated] = useState(false)
@@ -98,11 +100,12 @@ function Shell() {
       setKey(''); setError(''); setAuthenticated(true)
     } catch { setError('Unable to reach Tangle.') }
   }
-  return <><header><strong>tangle</strong><span>Pull requests, untangled.</span></header>
-    <main>{authenticated ? <Workspace /> : <section><h1>Open your board</h1><form onSubmit={login}>
+  if (authenticated) return <Workspace />
+  return <><header className="top-bar"><strong className="brand">tangle</strong><span>Pull requests, untangled.</span></header>
+    <main className="login-wrap"><section className="login-paper"><h1>Open your board</h1><form onSubmit={login}>
       <label>Development key<input type="password" value={key} onChange={e => setKey(e.target.value)} required autoComplete="current-password" /></label>
       <button>Unlock Tangle</button>
-    </form></section>}{error && <p role="alert">{error}</p>}</main></>
+    </form></section>{error && <p role="alert">{error}</p>}</main></>
 }
 export default function App() {
   return <QueryClientProvider client={queries}><Shell /></QueryClientProvider>

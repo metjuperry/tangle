@@ -5,6 +5,8 @@
     <ImplicitUsings>enable</ImplicitUsings>
     <Nullable>enable</Nullable>
     <IsPackable>false</IsPackable>
+    <OutputType>Exe</OutputType>
+    <StartupObject>Tangle.Web.Tests.BrowserHost</StartupObject>
   </PropertyGroup>
 
   <ItemGroup>
@@ -23,4 +25,7 @@
     <ProjectReference Include="..\..\src\Tangle.Host\Tangle.Host.csproj" />
   </ItemGroup>
 
+  <ItemGroup>
+    <Content Include="../fixtures/*.json" Link="fixtures/%(Filename)%(Extension)" CopyToOutputDirectory="PreserveNewest" />
+  </ItemGroup>
 </Project>

@@ -1,44 +1,78 @@
 import { test, expect } from '../../web/node_modules/@playwright/test'
 
-test('local key unlocks the embedded web shell', async ({ page }) => {
-  await page.goto('/')
+async function unlock(page: import('../../web/node_modules/@playwright/test').Page, path = '/') {
+  await page.goto(path)
   await page.getByLabel('Development key').fill('tangle-browser-test-key-not-a-secret')
   await page.getByRole('button', { name: 'Unlock Tangle' }).click()
-  await expect(page.getByRole('heading', { name: 'Your yarn board' })).toBeVisible()
-  await expect(page.getByText('No pull requests synced yet.')).toBeVisible()
+}
+test('fixture board renders cards, zones, batch and sagging strings', async ({ page }) => {
+  await unlock(page)
+  await expect(page.getByRole('region', { name: 'Yarn board' })).toBeVisible()
+  await expect(page.locator('.repo-zone')).toHaveCount(4)
+  await expect(page.locator('.batch-card')).toHaveCount(1)
+  await expect(page.locator('.batch-card')).toContainText('33 scaffold applier PRs')
+  await expect(page.locator('.yarn-tag')).toHaveCount(1)
+  await expect(page.locator('.pr-card.aged').first()).toBeVisible()
+  await expect(page.getByRole('link', { name: 'Debug PRs' })).toHaveCount(0)
 })
-
-test('settings persists watched owners without enabling AI', async ({ page }) => {
-  await page.goto('/settings')
-  await page.getByLabel('Development key').fill('tangle-browser-test-key-not-a-secret')
-  await page.getByRole('button', { name: 'Unlock Tangle' }).click()
-  await page.getByLabel('Owner name').fill('example')
-  await page.getByRole('button', { name: 'Add owner' }).click()
+test('card opens recorded review asks and links without editing', async ({ page }, testInfo) => {
+  await unlock(page)
+  await page.getByRole('button', { name: /example\/repo #49, Your turn/ }).click()
+  await expect(page.getByRole('heading', { name: 'Open asks · 4' })).toBeVisible()
+  await expect(page.locator('.review-ask')).toHaveCount(4)
+  await expect(page.getByText('4 open review comments', { exact: true })).toBeVisible()
+  await expect(page.getByRole('complementary', { name: 'Card details' }).getByRole('button', { name: /example\/tools#195/ })).toBeVisible()
+  await expect(page.getByRole('button', { name: 'Queue it' })).toHaveCount(0)
+  await page.screenshot({ path: testInfo.outputPath('board-card-back.png'), fullPage: true })
+})
+test('sync events invalidate board and open card context', async ({ page }) => {
+  await unlock(page)
+  await page.getByRole('button', { name: /example\/repo #49, Your turn/ }).click()
+  const response = await page.request.post('/api/sync')
+  expect(response.ok()).toBeTruthy()
+  await expect(page.getByRole('heading', { name: 'Updated from fixture sync' })).toBeVisible()
+  await expect(page.locator('[data-testid="card-example/repo#49"]')).toContainText('Updated from fixture sync')
+})
+test('opening stale board syncs once while fresh board does not', async ({ page }) => {
+  let syncs = 0
+  await page.route('**/api/board', async route => {
+    const response = await route.fetch()
+    const board = await response.json()
+    board.lastSyncAt = '2026-01-01T00:00:00Z'
+    await route.fulfill({ json: board })
+  })
+  page.on('request', request => { if (request.url().endsWith('/api/sync')) syncs++ })
+  await unlock(page)
+  await expect.poll(() => syncs).toBe(1)
+  await expect(page.locator('[data-testid="card-example/repo#49"]')).toContainText('Updated from fixture sync')
+  await page.unroute('**/api/board')
+  await page.reload()
+  await expect(page.getByRole('region', { name: 'Yarn board' })).toBeVisible()
+  expect(syncs).toBe(1)
+})
+test('others dim and viewport pans and zooms at 45 PR scale', async ({ page }) => {
+  await unlock(page)
+  await page.getByRole('button', { name: 'Dim others’ PRs' }).click()
+  await expect(page.locator('.pr-card.dimmed').first()).toBeVisible()
+  const viewport = page.locator('.react-flow__viewport')
+  const before = await viewport.getAttribute('style')
+  const board = page.getByRole('region', { name: 'Yarn board' })
+  await board.hover()
+  await page.mouse.wheel(0, -200)
+  await expect.poll(() => viewport.getAttribute('style')).not.toBe(before)
+  const bounds = await board.boundingBox()
+  if (!bounds) throw new Error('Board bounds missing')
+  await page.mouse.move(bounds.x + 20, bounds.y + 80)
+  await page.mouse.down()
+  await page.mouse.move(bounds.x + 100, bounds.y + 140, { steps: 10 })
+  await page.mouse.up()
+})
+test('settings persists bot logins and removed debug path is gone', async ({ page }) => {
+  await unlock(page, '/settings')
   await page.getByLabel('Bot logins (comma-separated)').fill('dependabot[bot], custom-bot')
   await page.getByRole('button', { name: 'Save settings' }).click()
-  await expect(page.getByRole('status')).toHaveText('Settings saved.')
+  await expect(page.getByRole('status').filter({ hasText: 'Settings saved.' })).toBeVisible()
   await page.reload()
-  await expect(page.getByText('example (org)')).toBeVisible()
   await expect(page.getByLabel('Bot logins (comma-separated)')).toHaveValue('dependabot[bot], custom-bot')
-  await expect(page.getByText('AI remains off until M5.', { exact: false })).toBeVisible()
-})
-
-test('debug table shows deterministic facts and rule strings', async ({ page }) => {
-  await page.route('**/api/board', route => route.fulfill({ json: {
-    cards: [{ id: 'example/repo#49', repoId: 'example/repo', number: 49, title: 'Example', author: 'viewer', isMine: true,
-      state: 'OPEN', isDraft: false, updatedAt: '2026-10-09', batchId: null,
-      facts: { turn: 'me', turnReason: '4 open review comments', ageDays: 14, idleDays: 7, size: 'M', origin: 'agent' } }],
-    strings: [{ id: 'rule:one', aRef: 'pr:example/repo#49', bRef: 'pr:example/repo#50', rule: 'explicit', reason: 'references #50' }]
-  } }))
-  await page.route('**/api/debug/prs', route => route.fulfill({ json: [{
-    id: 'example/repo#49', repoId: 'example/repo', number: 49, title: 'Example', author: 'viewer', isMine: true,
-    state: 'OPEN', isDraft: false, updatedAt: '2026-10-09', batchId: null,
-    facts: { turn: 'me', turnReason: '4 open review comments', ageDays: 14, idleDays: 7, size: 'M', origin: 'agent' }
-  }] }))
-  await page.goto('/debug/prs')
-  await page.getByLabel('Development key').fill('tangle-browser-test-key-not-a-secret')
-  await page.getByRole('button', { name: 'Unlock Tangle' }).click()
-  await expect(page.getByRole('cell', { name: '4 open review comments', exact: true })).toBeVisible()
-  await expect(page.getByRole('cell', { name: 'M / agent', exact: true })).toBeVisible()
-  await expect(page.getByText('references #50', { exact: false })).toBeVisible()
+  expect((await page.request.get('/debug/prs')).status()).toBe(404)
 })

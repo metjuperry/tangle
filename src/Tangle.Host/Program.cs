@@ -24,6 +24,8 @@ builder.Services.AddSingleton<ISyncStore>(services => services.GetRequiredServic
 builder.Services.AddSingleton<GitHubTokens>();
 builder.Services.AddHttpClient<IGitHubReader, GitHubReader>();
 builder.Services.AddSingleton<SyncService>();
+builder.Services.AddSingleton<EventHub>();
+builder.Services.AddSingleton<ILiveEvents>(services => services.GetRequiredService<EventHub>());
 var app = builder.Build();
 var applied = await app.Services.GetRequiredService<Database>().MigrateAsync();
 app.Logger.LogInformation("Applied {Count} database migrations", applied);
