@@ -47,6 +47,17 @@ test('card opens recorded review asks and links without editing', async ({ page 
   await expect(page.getByRole('button', { name: 'Queue it' })).toHaveCount(0)
   await page.screenshot({ path: testInfo.outputPath('board-card-back.png'), fullPage: true })
 })
+test('recent activity explains an unlinked commit author', async ({ page }) => {
+  await page.route('**/api/prs/example/repo/49', async route => {
+    const response = await route.fetch()
+    const context = await response.json()
+    context.events = [{ at: '2026-10-01T00:00:00Z', actor: null, actorDisplay: 'Example Author (unlinked commit author)', kind: 'commit' }]
+    await route.fulfill({ json: context })
+  })
+  await unlock(page)
+  await page.getByRole('button', { name: /example\/repo #49,/ }).click()
+  await expect(page.locator('.activity')).toContainText('Example Author (unlinked commit author)')
+})
 test('red string tag opens connection explanation by pointer and keyboard', async ({ page }) => {
   await unlock(page)
   const tag = page.getByRole('button', { name: 'Rule string: example/repo#49 and example/tools#195' })

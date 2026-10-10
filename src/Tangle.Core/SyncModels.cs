@@ -16,6 +16,23 @@ public sealed record WatchedSettings(IReadOnlyList<OwnerSetting> Owners, IReadOn
 public sealed record PrEvent(string At, string? Actor, string Kind, string Detail)
 {
     public PrEvent() : this("", null, "", "") { }
+    public string? ActorDisplay
+    {
+        get
+        {
+            if (!string.IsNullOrWhiteSpace(Actor)) return Actor;
+            if (Kind != "commit") return null;
+            using var json = System.Text.Json.JsonDocument.Parse(Detail);
+            if (json.RootElement.TryGetProperty("commit", out var commit) &&
+                commit.TryGetProperty("author", out var author) && author.ValueKind == System.Text.Json.JsonValueKind.Object &&
+                author.TryGetProperty("name", out var name) && name.ValueKind == System.Text.Json.JsonValueKind.String)
+            {
+                var value = name.GetString();
+                if (!string.IsNullOrWhiteSpace(value)) return $"{value} (unlinked commit author)";
+            }
+            return null;
+        }
+    }
 }
 public sealed record ReviewThread(string Id, string? Path, bool IsResolved, string? LastActor, string? LastAt, string? Excerpt)
 {

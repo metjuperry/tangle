@@ -4,7 +4,7 @@ export type Card = { id: string; repoId: string; number: number; title: string; 
 export type Yarn = { id: string; aRef: string; bRef: string; source: 'rule' | 'ai' | 'me'; status: string; rule: string | null; reason: string | null; label: string | null }
 export type Sticky = { id: string; title: string; color: string; total: number; merged: number }
 export type Board = { cards: Card[]; strings: Yarn[]; cutStrings?: Yarn[]; lastSyncAt: string | null; stickies: Sticky[]; notes: { id: string; targetRef: string; text: string }[]; positions: { nodeRef: string; x: number; y: number }[] }
-export type Context = { card: Card; body: string; threads: { id: string; path: string | null; lastActor: string | null; lastAt: string | null; excerpt: string | null }[]; events: { at: string; actor: string | null; kind: string }[]; strings: Yarn[] }
+export type Context = { card: Card; body: string; threads: { id: string; path: string | null; lastActor: string | null; lastAt: string | null; excerpt: string | null }[]; events: { at: string; actor: string | null; actorDisplay?: string | null; kind: string }[]; strings: Yarn[] }
 export const turnLabel = (turn?: string) => turn === 'me' ? 'Your turn' : turn === 'nobody' ? "Nobody’s turn" : 'Waiting on others'
 export function write<T>(path: string, method: string, body: object): Promise<T> {
   return api<T>(path, { method, headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(body) })
