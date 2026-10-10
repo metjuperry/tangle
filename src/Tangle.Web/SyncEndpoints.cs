@@ -3,6 +3,7 @@ using Microsoft.AspNetCore.Builder;
 using Microsoft.AspNetCore.Http;
 using Microsoft.Extensions.Logging;
 using Microsoft.Extensions.Configuration;
+using Tangle.Sessions;
 using Tangle.Core;
 using Tangle.Data;
 
@@ -34,9 +35,9 @@ public static partial class SyncEndpoints
             events.Publish("prs.changed", new { ids = Array.Empty<string>() });
             return Results.Ok(await store.GetSettingsAsync(ct));
         });
-        api.MapPost("/sync", async (SyncService sync, ILogger<SyncService> logger, CancellationToken ct) =>
+        api.MapPost("/sync", async (SyncService sync, SessionService sessions, ILogger<SyncService> logger, CancellationToken ct) =>
         {
-            try { return Results.Ok(await sync.RunAsync(ct)); }
+            try { var result = await sync.RunAsync(ct); await sessions.MatchAsync(ct); return Results.Ok(result); }
             catch (SyncInProgressException e) { return Results.Conflict(new { error = e.Message }); }
             catch (Exception e) when (e is InvalidOperationException or HttpRequestException or System.ComponentModel.Win32Exception)
             {

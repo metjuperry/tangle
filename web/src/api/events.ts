@@ -9,6 +9,7 @@ export function useLiveEvents() {
     const invalidate = () => {
       void client.invalidateQueries({ queryKey: ['board'] })
       void client.invalidateQueries({ queryKey: ['pr'] })
+      void client.invalidateQueries({ queryKey: ['sessions'] })
     }
     for (const type of ['prs.changed', 'verdict.ready', 'link.changed', 'sticky.changed', 'board.reload']) events.addEventListener(type, invalidate)
     events.addEventListener('board.reload', () => { void client.invalidateQueries({ queryKey: ['settings'] }) })

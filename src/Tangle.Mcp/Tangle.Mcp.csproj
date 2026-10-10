@@ -2,6 +2,12 @@
 
   <ItemGroup>
     <ProjectReference Include="..\Tangle.Core\Tangle.Core.csproj" />
+    <ProjectReference Include="..\Tangle.Data\Tangle.Data.csproj" />
+    <ProjectReference Include="..\Tangle.Sessions\Tangle.Sessions.csproj" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <PackageReference Include="ModelContextProtocol.AspNetCore" Version="1.0.0" />
   </ItemGroup>
 
   <PropertyGroup>

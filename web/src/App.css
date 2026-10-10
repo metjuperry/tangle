@@ -103,6 +103,12 @@ a { color: var(--yarn); }
 .related-card { width: 100%; display: flex; flex-direction: column; gap: 4px; padding: 8px 12px; margin: 6px 0; border: 1px solid #e2d7c3; border-radius: 4px; background: var(--paper); color: var(--ink); text-align: left; font-size: 13px; overflow-wrap: anywhere; }
 .related-card b { font-family: 'IBM Plex Mono',monospace; font-size: 12px; color: var(--yarn); }.activity, .quiet { font-size: 13px; line-height: 20px; color: #5e564b; }
 .panel-empty { padding-top: 80px; }.empty-pin { color: var(--pin-me); font-size: 28px; }
+.agent-session b { font-family: 'Bricolage Grotesque',sans-serif; font-size: 14px; color: var(--ink); }
+.agent-session a { font-size: 12px; font-weight: 700; }
+.agent-session details { margin-top: 6px; font-size: 11px; color: #5e564b; }
+.agent-session summary { cursor: pointer; }
+.agent-session code { display: block; margin-top: 8px; overflow-wrap: anywhere; white-space: pre-wrap; }
+.agent-session .session-excerpt { margin: 4px 0; font-size: 13px; line-height: 20px; color: var(--ink); }
 .notice { background: var(--paper); padding: 8px 24px; font-size: 13px; }.notice-error { color: #8e1a24; }
 .board-empty { position: absolute; left: 10%; top: 20%; padding: 24px; background: var(--paper); box-shadow: 0 4px 12px #221c1540; }
 .login-wrap, .settings-wrap { padding: 48px 24px; overflow: auto; }

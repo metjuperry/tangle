@@ -7,6 +7,7 @@ using Microsoft.AspNetCore.Builder;
 using Microsoft.AspNetCore.Http;
 using Microsoft.Extensions.DependencyInjection;
 using Tangle.Core;
+using Tangle.Data;
 
 namespace Tangle.Web;
 
@@ -51,6 +52,25 @@ public static class LocalAuthentication
         app.Use(async (context, next) =>
         {
             var bearer = context.Request.Headers.Authorization.ToString();
+            var personalRoute = context.Request.Path.StartsWithSegments("/mcp") ||
+                context.Request.Path == "/api/sessions" && HttpMethods.IsPost(context.Request.Method);
+            if (personalRoute)
+            {
+                if (!bearer.StartsWith("Bearer ", StringComparison.Ordinal) ||
+                    !await context.RequestServices.GetRequiredService<PersonalKeys>().ValidAsync(bearer[7..], context.RequestAborted))
+                {
+                    context.Response.StatusCode = 401;
+                    await context.Response.WriteAsJsonAsync(new { error = "An active personal key is required." });
+                    return;
+                }
+                context.User = Principal();
+            }
+            else if (bearer.StartsWith("Bearer tangle_", StringComparison.Ordinal))
+            {
+                context.Response.StatusCode = 403;
+                await context.Response.WriteAsJsonAsync(new { error = "Personal keys may access only MCP and session reporting." });
+                return;
+            }
             if (bearer.StartsWith("Bearer ", StringComparison.Ordinal) && Matches(bearer[7..], settings.DevelopmentKey))
                 context.User = Principal();
             await next(context);

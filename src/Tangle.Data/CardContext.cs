@@ -27,9 +27,16 @@ public sealed partial class SyncStore
             SELECT at AS At,actor AS Actor,kind AS Kind,detail AS Detail FROM pr_event WHERE pr_id=@id ORDER BY at DESC LIMIT 30
             """, new { id }, cancellationToken: ct));
         var strings = (await GetStringsAsync(ct)).Where(l => l.ARef == $"pr:{id}" || l.BRef == $"pr:{id}").ToArray();
-        return new(card, body, threads.ToArray(), events.ToArray(), strings);
+        var sessions = await db.QueryAsync<CardSession>(new CommandDefinition("""
+            SELECT id AS Id,matched_by AS MatchedBy,excerpt AS Excerpt FROM session WHERE pr_id=@id ORDER BY started_at DESC
+            """, new { id }, cancellationToken: ct));
+        return new(card, body, threads.ToArray(), events.ToArray(), strings) { Sessions = sessions.ToArray() };
     }
 }
 
 public sealed record CardContext(BoardCard Card, string Body, IReadOnlyList<ReviewThread> Threads,
-    IReadOnlyList<PrEvent> Events, IReadOnlyList<BoardString> Strings);
+    IReadOnlyList<PrEvent> Events, IReadOnlyList<BoardString> Strings)
+{
+    public IReadOnlyList<CardSession> Sessions { get; init; } = [];
+}
+public sealed record CardSession(string Id, string? MatchedBy, string? Excerpt);
