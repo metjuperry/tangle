@@ -1,0 +1,8 @@
+query ChangedPrs($q: String!, $after: String) {
+  search(type: ISSUE, query: $q, first: 50, after: $after) {
+    issueCount
+    pageInfo { hasNextPage endCursor }
+    nodes { ... on PullRequest { id updatedAt } }
+  }
+  rateLimit { cost remaining resetAt }
+}

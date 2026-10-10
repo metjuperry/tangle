@@ -1,4 +1,4 @@
-# Local setup (M0)
+# Local setup (M0-M1)
 
 Requires .NET 10, Node 24, npm, and GitHub CLI for M1 sync.
 
@@ -26,3 +26,11 @@ npx playwright test
 ```
 
 Browser tests start their own loopback host using a fresh temporary database, never the working database. No tests call GitHub or an AI provider. A remote is not configured yet, so GitHub Actions cannot run until a repository destination is supplied.
+
+## GitHub sync
+
+Run `gh auth login` if needed. The backend reads `gh auth token`; it never stores it. For fine-grained credentials use `GitHub:Tokens:TALXIS` and `GitHub:Tokens:metjuperry` in Host user-secrets (environment equivalents `GitHub__Tokens__TALXIS` and `GitHub__Tokens__metjuperry`). A single fallback credential may be set as `GitHub:Token` / `GitHub__Token`. Tokens need read access to the watched repositories and pull requests; no write permissions are needed in M1.
+
+Open `/settings`, add `TALXIS` as an Organization and `metjuperry` as a Personal account, then **Save settings**. Press **Sync** and open `/debug/prs`. Defaults are empty until you configure them. Owner scopes include PRs involving your authenticated GitHub account, not every open PR in an organization. AI cannot be enabled in M1.
+
+`POST /api/sync` returns fetched/changed/call/cost counts. Cost includes search and nested pagination calls; viewer lookup cost is logged separately. No automatic or scheduled sync is implemented in M1. The debug page includes cached closed PRs for inspection; `/api/board` and the Board page exclude them.

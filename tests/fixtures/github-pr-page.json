@@ -1,0 +1,218 @@
+{
+  "data": {
+    "search": {
+      "issueCount": 1,
+      "pageInfo": {
+        "hasNextPage": false,
+        "endCursor": null
+      },
+      "nodes": [
+        {
+          "id": "fixture-id-2",
+          "number": 49,
+          "title": "Example pull request",
+          "body": "Scrubbed public fixture text.",
+          "url": "https://github.com/example/repo/pull/49",
+          "isDraft": false,
+          "state": "OPEN",
+          "createdAt": "2026-09-25T15:25:01Z",
+          "updatedAt": "2026-10-02T13:13:38Z",
+          "closedAt": null,
+          "author": {
+            "login": "viewer"
+          },
+          "repository": {
+            "nameWithOwner": "example/repo"
+          },
+          "headRefName": "example",
+          "baseRefName": "main",
+          "mergeable": "MERGEABLE",
+          "mergeStateStatus": "CLEAN",
+          "reviewDecision": null,
+          "additions": 329,
+          "deletions": 1,
+          "changedFiles": 8,
+          "files": {
+            "pageInfo": {
+              "hasNextPage": false,
+              "endCursor": "fixture-id-3"
+            },
+            "nodes": [
+              {
+                "path": "src/example-1.txt"
+              },
+              {
+                "path": "src/example-2.txt"
+              },
+              {
+                "path": "src/example-3.txt"
+              },
+              {
+                "path": "src/example-4.txt"
+              },
+              {
+                "path": "src/example-5.txt"
+              },
+              {
+                "path": "src/example-6.txt"
+              },
+              {
+                "path": "src/example-7.txt"
+              },
+              {
+                "path": "src/example-8.txt"
+              }
+            ]
+          },
+          "reviewRequests": {
+            "pageInfo": {
+              "hasNextPage": false,
+              "endCursor": null
+            },
+            "nodes": []
+          },
+          "reviewThreads": {
+            "pageInfo": {
+              "hasNextPage": false,
+              "endCursor": "fixture-id-4"
+            },
+            "nodes": [
+              {
+                "id": "fixture-id-5",
+                "isResolved": false,
+                "path": "src/example-7.txt",
+                "comments": {
+                  "nodes": [
+                    {
+                      "author": {
+                        "login": "person-1"
+                      },
+                      "createdAt": "2026-10-02T12:38:25Z",
+                      "bodyText": "Scrubbed public fixture text."
+                    }
+                  ]
+                }
+              },
+              {
+                "id": "fixture-id-6",
+                "isResolved": false,
+                "path": "src/example-3.txt",
+                "comments": {
+                  "nodes": [
+                    {
+                      "author": {
+                        "login": "person-1"
+                      },
+                      "createdAt": "2026-10-02T13:13:38Z",
+                      "bodyText": "Scrubbed public fixture text."
+                    }
+                  ]
+                }
+              },
+              {
+                "id": "fixture-id-7",
+                "isResolved": false,
+                "path": "src/example-3.txt",
+                "comments": {
+                  "nodes": [
+                    {
+                      "author": {
+                        "login": "person-1"
+                      },
+                      "createdAt": "2026-10-02T13:13:38Z",
+                      "bodyText": "Scrubbed public fixture text."
+                    }
+                  ]
+                }
+              },
+              {
+                "id": "fixture-id-8",
+                "isResolved": false,
+                "path": "src/example-3.txt",
+                "comments": {
+                  "nodes": [
+                    {
+                      "author": {
+                        "login": "person-1"
+                      },
+                      "createdAt": "2026-10-02T13:13:38Z",
+                      "bodyText": "Scrubbed public fixture text."
+                    }
+                  ]
+                }
+              }
+            ]
+          },
+          "commits": {
+            "nodes": [
+              {
+                "commit": {
+                  "committedDate": "2026-09-25T15:23:55Z",
+                  "message": "Scrubbed public fixture text.",
+                  "author": {
+                    "user": null
+                  },
+                  "statusCheckRollup": null
+                }
+              }
+            ]
+          },
+          "timelineItems": {
+            "pageInfo": {
+              "hasPreviousPage": false,
+              "startCursor": "fixture-id-9"
+            },
+            "nodes": [
+              {
+                "__typename": "PullRequestCommit",
+                "commit": {
+                  "committedDate": "2026-09-25T15:23:55Z",
+                  "message": "Scrubbed public fixture text.",
+                  "author": {
+                    "user": null
+                  }
+                }
+              },
+              {
+                "__typename": "ReviewRequestedEvent",
+                "createdAt": "2026-09-29T14:09:23Z",
+                "actor": {
+                  "login": "viewer"
+                },
+                "requestedReviewer": {
+                  "__typename": "User",
+                  "login": "person-1"
+                }
+              },
+              {
+                "__typename": "PullRequestReview",
+                "createdAt": "2026-10-02T12:38:25Z",
+                "submittedAt": "2026-10-02T12:38:25Z",
+                "author": {
+                  "login": "person-1"
+                },
+                "body": "Scrubbed public fixture text.",
+                "state": "COMMENTED"
+              },
+              {
+                "__typename": "PullRequestReview",
+                "createdAt": "2026-10-02T13:13:38Z",
+                "submittedAt": "2026-10-02T13:13:38Z",
+                "author": {
+                  "login": "person-1"
+                },
+                "body": "Scrubbed public fixture text.",
+                "state": "COMMENTED"
+              }
+            ]
+          }
+        }
+      ]
+    },
+    "rateLimit": {
+      "cost": 53,
+      "remaining": 4567,
+      "resetAt": "2026-10-09T23:00:05Z"
+    }
+  }
+}

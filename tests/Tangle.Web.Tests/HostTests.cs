@@ -65,4 +65,33 @@ public sealed class HostTests(TangleFactory factory) : IClassFixture<TangleFacto
         if (origin is not null) client.DefaultRequestHeaders.Add("Origin", origin);
         Assert.Equal(HttpStatusCode.Forbidden, (await client.GetAsync("/healthz")).StatusCode);
     }
+
+    [Fact]
+    public async Task SettingsBoardAndSyncRequireAuthentication()
+    {
+        using var client = factory.LocalClient();
+        foreach (var path in new[] { "/api/settings", "/api/board", "/api/debug/prs" })
+            Assert.Equal(HttpStatusCode.Unauthorized, (await client.GetAsync(path)).StatusCode);
+        Assert.Equal(HttpStatusCode.Unauthorized, (await client.PostAsync("/api/sync", null)).StatusCode);
+    }
+
+    [Fact]
+    public async Task SettingsValidateScopeAndKeepAiDisabled()
+    {
+        using var client = factory.LocalClient();
+        client.DefaultRequestHeaders.Authorization = new("Bearer", TangleFactory.Key);
+        var good = new { owners = new[] { new { id = "example", kind = "org", watched = true } },
+            repos = new[] { new { id = "example/repo", watched = true, aiAllowed = false } } };
+        Assert.Equal(HttpStatusCode.OK, (await client.PutAsJsonAsync("/api/settings", good)).StatusCode);
+        Assert.Contains("example/repo", await client.GetStringAsync("/api/settings"));
+        Assert.Equal(HttpStatusCode.BadRequest, (await client.PutAsJsonAsync("/api/settings", new
+        {
+            owners = Array.Empty<object>(), repos = new[] { new { id = "example/repo", watched = true, aiAllowed = true } }
+        })).StatusCode);
+        Assert.Equal(HttpStatusCode.BadRequest, (await client.PutAsJsonAsync("/api/settings", new
+        {
+            owners = new[] { new { id = "example is:closed", kind = "org", watched = true } }, repos = Array.Empty<object>()
+        })).StatusCode);
+        Assert.Equal(HttpStatusCode.OK, (await client.GetAsync("/api/board")).StatusCode);
+    }
 }

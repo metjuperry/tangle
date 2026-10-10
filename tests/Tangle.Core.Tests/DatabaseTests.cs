@@ -14,7 +14,7 @@ public sealed class DatabaseTests
         try
         {
             var database = new Database(Path.Combine(directory, "test.db"));
-            Assert.Equal(1, await database.MigrateAsync());
+            Assert.Equal(2, await database.MigrateAsync());
             Assert.Equal(0, await database.MigrateAsync());
             await using var connection = await database.OpenAsync();
             var tables = (await connection.QueryAsync<string>(

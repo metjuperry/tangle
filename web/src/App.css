@@ -5,3 +5,8 @@ section { padding: 24px; background: #fbf6ea; max-width: 600px; box-shadow: 0 4p
 label { display: grid; gap: 8px; }
 input, button { font: inherit; padding: 10px; margin-top: 8px; }
 button { cursor: pointer; }
+nav { margin-bottom: 24px; }
+.backlog { max-width: none; overflow-x: auto; }
+table { border-collapse: collapse; width: 100%; }
+td, th { padding: 8px; text-align: left; border-bottom: 1px solid #cfc3ac; }
+td:first-child { font-family: 'IBM Plex Mono', monospace; white-space: nowrap; }
