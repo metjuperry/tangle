@@ -35,6 +35,8 @@ reset the database. Do not commit personal keys or Claude user settings.
 
 ## Verification and limitations
 
+Published as [PR #8](https://github.com/metjuperry/tangle/pull/8), based on M6 and left unmerged. Local validation passed 95 .NET tests, 35 browser tests and two hook-wrapper tests. GitHub reports no workflow runs for the branch, so remote CI is not claimed green.
+
 Local tests exercise authenticated HTTP MCP initialize/list/call, all eight tool
 methods, personal key hashing/scope/revocation, branch/trailer/manual matching,
 session reporting and browser key controls. Hooks use temporary real Git repos
