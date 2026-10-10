@@ -1,0 +1,68 @@
+[
+  {
+    "id": "board",
+    "title": "Read the board",
+    "paragraphs": [
+      "Each repository has a zone, and each PR is a pinned card. Orange means your turn, blue means waiting on others, and grey means nobody's turn. The text stamp also identifies the status. Paper yellows after 40 days open; staleness uses 21 days without human activity, not simply the PR's age.",
+      "Pick a card to read its description, computed facts, unresolved review asks, related PRs and sessions. Facts are deterministic; AI proposals do not change them. Dim others fades PRs authored by other people, not your own PRs waiting on a reviewer."
+    ]
+  },
+  {
+    "id": "finding",
+    "title": "Find and navigate",
+    "paragraphs": [
+      "Drag empty cork to pan and use the mouse wheel or zoom controls to zoom. Below 60%, cards show their number and pin; below 35%, repositories become summaries. Pick a summary to zoom back in.",
+      "Ctrl+K or Cmd+K opens a search over PR numbers and titles. Choose a result to bring its card into view. Tab moves through controls and cards; arrow keys move focus to the nearest card in that direction. Animations respect your system's reduced-motion preference."
+    ]
+  },
+  {
+    "id": "strings",
+    "title": "Strings, groups and your notes",
+    "paragraphs": [
+      "Solid red yarn is a rule link: an explicit reference, a branch stack or shared changed files. Dashed yarn with a question mark is a proposal waiting for your judgment. Navy yarn with a pencil tag is a tie you created. Pick a tag to read why the connection exists.",
+      "Tie by dragging pin to pin or choose Tie a string on a card back and pick the other card or sticky. Labels are optional. Cut strings stay cut after sync; the Cut strings list lets you re-tie them. Notes, labels and positions are local data that sync never overwrites.",
+      "Five or more similar PRs by one author in one repo within 14 days can form a title batch. Clear base/head branch chains appear as ordered stacks, base first. Arrange separately lets you move members; Group stack again restores the automatic layout and clears only that stack's saved positions.",
+      "New sticky in the toolbar creates a goal such as a release. Tie PRs across repos to it and add notes. Its knots count merged PRs, not closed-but-unmerged PRs. You can rename, recolor or archive the sticky."
+    ]
+  },
+  {
+    "id": "untangle",
+    "title": "Decide in Untangle",
+    "paragraphs": [
+      "Untangle contains your open PRs: your turn first, then nobody's turn by idle days, then the rest by age. M/F/P/W/X/S choose Merge, Fix, Ping, Wait, Close or Snooze. U undoes the last decision in this round if its GitHub action has not been attempted.",
+      "Fix opens one dropdown with Still my turn selected. This acknowledges local work and moves to the next card without making a to-do or GitHub action; the computed turn remains unchanged. Choose Post comment or another action in that same dialog if you want to draft something.",
+      "Wait means no action now because you are waiting; Snooze postpones your decision. Currently both leave the remaining deck and persist until Undo or a fresh round. Snooze has no timer or automatic return. Neither posts to GitHub.",
+      "The beads count distinct decisions for your current open PRs, not historic closed or merged ones. When nothing is waiting, a completion panel replaces the card stack."
+    ]
+  },
+  {
+    "id": "receipt",
+    "title": "Queue, confirm and save a round",
+    "paragraphs": [
+      "The receipt holds exact queued comments, review requests, closes and merges. Queueing never posts anything. Each Apply asks you to confirm the target and exact text, reviewer or operation. Apply defaults off and is restricted to the server-configured sandbox.",
+      "A queued merge captures the current head automatically. If new commits arrive, Apply blocks the merge until you queue it again. Close and merge on another person's PR are blocked. Failed or uncertain attempts are not retried automatically: inspect GitHub first.",
+      "Once an action is applied, scissors Tear & save appears along the perforation. It saves applied results and current decisions into a historical receipt, resets the beads and returns still-open PRs to Untangle. Queued actions and failed attempts remain active. It does not reset facts, notes, strings, positions or AI caching.",
+      "History between Sync and Settings opens saved receipts. Applied entries show a plain-language result and View on GitHub. Saved actions cannot be applied again."
+    ]
+  },
+  {
+    "id": "sync-ai",
+    "title": "Sync, privacy and evaluation",
+    "paragraphs": [
+      "Settings chooses watched organizations, accounts and repositories. Sync reads PRs involving your GitHub account; opening a board more than ten minutes stale also syncs once. There is no scheduled sync. GitHub rate-limit points are an API allowance, not money.",
+      "AI requires server enablement, a provider key and an explicit Allow AI switch for each repo. It sees bounded titles, descriptions, changed paths, review excerpts and relevant labels, never diffs or file contents. Check client policy before opting in. A provider API key and API billing are separate from a Claude subscription.",
+      "Unchanged PRs and pairs reuse their last assessment across syncs and restarts. Clock-only aging, prompt edits and batch packing do not automatically recheck them. Changed metadata or your labels can justify a new assessment; paid or uncertain failures are not retried silently. Starting a new receipt round does not force AI reruns.",
+      "Settings → Open Evaluate shows labelled-sample metrics, disagreement lists, a report and Recent AI calls. Viewing makes no provider calls. A fresh replay is explicitly confirmed, budgeted and limited to permitted original inputs. Fewer than 30 labels and missing old input snapshots are reported. Snooze is not scored as a verdict.",
+      "Haiku is the default; Jev remains disabled until explicitly enabled on the server. Jev returns decisions rather than prose. Explain with Haiku is a separate paid request. Monthly budget limits further calls; unresolved usage remains conservatively reserved."
+    ]
+  },
+  {
+    "id": "sessions",
+    "title": "Connect an agent",
+    "paragraphs": [
+      "Settings generates an Agent personal key for Tangle; it is not an Anthropic or Claude account key. You choose a name and Tangle generates the secret, shown once and stored only as a hash. Revoke it from Settings when no longer needed.",
+      "Claude Code connects to the HTTP MCP endpoint with that key. It can read PR context and propose notes, strings, verdicts and queued actions. There is no Apply tool, and personal keys cannot access Apply or Settings.",
+      "The SessionEnd hook sends repo, branch and local transcript-path metadata. Transcripts stay on your machine. A first-prompt excerpt is off by default. Sessions match by unique branch or Claude-Session trailer, and manual attachment wins. Session cards show a readable label; raw IDs are in details."
+    ]
+  }
+]

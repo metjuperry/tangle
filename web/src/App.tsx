@@ -15,6 +15,7 @@ import { ReceiptHistory } from './deck/ReceiptHistory'
 import { PersonalKeys } from './settings/PersonalKeys'
 import { Evaluate } from './evaluate/Evaluate'
 import type { AiStatus } from './evaluate/AiCalls'
+const FeatureGuide = lazy(() => import('./help/FeatureGuide').then(module => ({ default: module.FeatureGuide })))
 const Untangle = lazy(() => import('./deck/Untangle').then(module => ({ default: module.Untangle })))
 
 type Owner = { id: string; kind: 'org' | 'user'; watched: boolean }
@@ -105,6 +106,7 @@ function Workspace() {
   const [navigationError, setNavigationError] = useState('')
   const [creatingSticky, setCreatingSticky] = useState(false)
   const [showHistory, setShowHistory] = useState(false)
+  const [showGuide, setShowGuide] = useState(false)
   const queryClient = useQueryClient()
   useEffect(() => {
     function navigate(next: string, updateHistory: boolean) {
@@ -160,6 +162,13 @@ function Workspace() {
     mutationFn: () => api<SyncResult>('/api/sync', { method: 'POST' }),
     onSuccess: async () => { await queryClient.invalidateQueries({ queryKey: ['board'] }); await queryClient.invalidateQueries({ queryKey: ['pr'] }); await queryClient.invalidateQueries({ queryKey: ['settings'] }) },
   })
+  const signOut = useMutation({
+    mutationFn: async () => {
+      const response = await fetch('/api/auth/logout', { method: 'POST' })
+      if (!response.ok) throw new Error('Unable to sign out.')
+    },
+    onSuccess: () => { queries.clear(); window.location.assign('/') },
+  })
   const mutate = sync.mutate
   useEffect(() => {
     if (path !== '/' || !board.data || attemptedAutoSync.current) return
@@ -179,7 +188,11 @@ function Workspace() {
     {path === '/' && <button className="header-button" onClick={() => setCreatingSticky(true)}>New sticky</button>}
     <button className="header-button" disabled={sync.isPending} onClick={() => sync.mutate()}>{sync.isPending ? 'Syncing…' : 'Sync'}</button>
     <button className="header-button" onClick={() => setShowHistory(true)}>History</button>
-    <a className="header-button" href="/settings">Settings</a></header>
+    <a className="header-button" href="/settings">Settings</a>
+    <button className="header-button" onClick={() => setShowGuide(true)}>Help</button></header>
+    {showGuide && <Suspense fallback={<p className="notice" role="status">Loading feature guide…</p>}><FeatureGuide onClose={() => setShowGuide(false)} /></Suspense>}
+    {path === '/settings' && <button className="sign-out-button" disabled={signOut.isPending} onClick={() => signOut.mutate()}>Lock Tangle</button>}
+    {signOut.error && <p role="alert">{signOut.error.message}</p>}
     {showHistory && <ReceiptHistory onClose={() => setShowHistory(false)} />}
     {creatingSticky && <NewSticky onClose={() => setCreatingSticky(false)} />}
     {(status || sync.error) && <div className={`notice ${sync.error ? 'notice-error' : ''}`} role={sync.error ? 'alert' : 'status'}>{sync.error?.message ?? status}</div>}
