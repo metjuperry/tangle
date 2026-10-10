@@ -4,6 +4,8 @@
 
 ## Built
 
+Published as [PR #9](https://github.com/metjuperry/tangle/pull/9), based on M7 and left unmerged. Local validation passed 100 .NET tests and 38 browser tests. GitHub CI has now registered a queued run; its result is not yet known.
+
 - Evaluate page and downloadable Markdown report from saved model judgments and your labelled decisions.
 - Relationship precision/recall at strictly above 0.75; next-step agreement; Brier calibration; cost/latency per 100 completed calls; disagreement lists.
 - Coverage count and explicit “more needed for 30” message. Snooze is excluded because it postpones a decision rather than selecting a model verdict.
