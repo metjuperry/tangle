@@ -57,7 +57,7 @@ Board/Untangle navigation now stays in the app. A paper-and-yarn loading overlay
 - Fix, Ping and Split intent cannot safely become GitHub mutations automatically; the exact action editor makes the actual operation explicit. No generated comment is posted without review.
 - Wait/Snooze persist local decisions but do not enqueue GitHub actions. Snooze leaves the current deck until undo; a time-based snooze/revisit rule is unspecified and not invented.
 - Close posts no comment; queue a separate comment to explain it. Closing another person's PR is blocked.
-- Merge initially uses MERGE strategy and requires entering the expected SHA. Decide whether merge should stay disabled and whether to offer other methods later.
+- Merge uses MERGE strategy and automatically captures the current head from a read-only GitHub request when queued; nobody types a SHA. Apply rechecks and pins that version so new commits block the merge. The confirmation shows version details only on demand. Decide whether merge should stay disabled and whether to offer other methods later.
 - Undo cannot reverse an already attempted GitHub action. It only removes local decisions/queued receipt entries.
 
 Review your real deck but apply only in the sandbox. Decide allowed repositories and action kinds after inspecting the confirmations and real sandbox results. **M7 has not started.**

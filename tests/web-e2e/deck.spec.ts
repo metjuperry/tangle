@@ -1,5 +1,24 @@
 import { test, expect } from '../../web/node_modules/@playwright/test'
 
+test('merge captures the PR version automatically without asking for a SHA', async ({ page }) => {
+  let queuedPayload: { kind: string; payload: object } | undefined
+  await page.route('**/api/actions', async route => {
+    if (route.request().method() !== 'POST') { await route.continue(); return }
+    queuedPayload = route.request().postDataJSON()
+    await route.fulfill({ json: { id: 'merge-auto-fixture', prId: 'example/repo#49', kind: 'merge',
+      payload: JSON.stringify({ HeadSha: 'a'.repeat(40) }), status: 'queued', result: null } })
+  })
+  await page.goto('/')
+  await page.getByLabel('Development key').fill('tangle-browser-test-key-not-a-secret')
+  await page.getByRole('button', { name: 'Unlock Tangle' }).click()
+  await page.getByRole('button', { name: /example\/repo #49,/ }).click()
+  await page.getByRole('button', { name: 'Queue a GitHub action' }).click()
+  await page.getByLabel('Action kind').selectOption('merge')
+  await expect(page.getByText('Tangle captures the current PR version from GitHub', { exact: false })).toBeVisible()
+  await expect(page.getByLabel('Expected head SHA')).toHaveCount(0)
+  await page.getByRole('button', { name: 'Queue action', exact: true }).click()
+  expect(queuedPayload).toEqual({ prId: 'example/repo#49', kind: 'merge', payload: {} })
+})
 test('view switch keeps board underneath a yarn loader until Untangle is ready', async ({ page }) => {
   let release!: () => void
   const ready = new Promise<void>(resolve => { release = resolve })

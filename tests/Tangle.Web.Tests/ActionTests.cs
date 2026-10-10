@@ -44,6 +44,15 @@ public sealed class ActionTests
         Assert.Equal("Exact text", github.Text);
         Assert.Equal(HttpStatusCode.Conflict, (await client.PostAsJsonAsync($"/api/actions/{action.Id}/apply", new { confirmed = true })).StatusCode);
         Assert.Equal(1, github.Applied);
+        var mergeResponse = await client.PostAsJsonAsync("/api/actions", new
+        {
+            prId = "fixture/sandbox#1", kind = "merge", payload = new { headSha = new string('b', 40) }
+        });
+        Assert.Equal(HttpStatusCode.OK, mergeResponse.StatusCode);
+        var merge = await mergeResponse.Content.ReadFromJsonAsync<QueuedAction>();
+        var payload = System.Text.Json.JsonSerializer.Deserialize<ActionPayload>(merge!.Payload);
+        Assert.Equal(new string('a', 40), payload!.HeadSha);
+        Assert.Equal(1, github.Applied); // Queueing inspects but never mutates.
     }
     [Fact]
     public async Task DisabledApplyNeverCallsGitHub()

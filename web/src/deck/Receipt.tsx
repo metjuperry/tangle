@@ -7,12 +7,11 @@ export function ActionComposer({ prId, onClose, onQueued, initialKind = 'comment
   const [kind, setKind] = useState(initialKind)
   const [text, setText] = useState('')
   const [reviewer, setReviewer] = useState('')
-  const [headSha, setHeadSha] = useState('')
   const dialog = useRef<HTMLDialogElement>(null)
   const client = useQueryClient()
   useEffect(() => { dialog.current?.showModal() }, [])
   const save = useMutation({ mutationFn: () => write<Action>('/api/actions', 'POST', { prId, kind,
-    payload: kind === 'comment' ? { text } : kind === 'request_review' ? { reviewer } : kind === 'merge' ? { headSha } : {} }),
+    payload: kind === 'comment' ? { text } : kind === 'request_review' ? { reviewer } : {} }),
     onSuccess: async action => { await client.invalidateQueries({ queryKey: ['actions'] }); onQueued?.(action.id); onClose() } })
   return <dialog ref={dialog} className="new-sticky-dialog" aria-labelledby="queue-heading" onCancel={onClose}>
     <h2 id="queue-heading">Queue action · {prId}</h2><p>Nothing is posted until you confirm Apply on the receipt.</p>
@@ -20,9 +19,9 @@ export function ActionComposer({ prId, onClose, onQueued, initialKind = 'comment
       <label>Action kind<select value={kind} onChange={e => setKind(e.target.value)}><option value="comment">Post comment</option><option value="request_review">Request review</option><option value="close">Close PR</option><option value="merge">Merge PR</option></select></label>
       {kind === 'comment' && <label>Comment text<textarea value={text} onChange={e => setText(e.target.value)} required /></label>}
       {kind === 'request_review' && <label>Reviewer login<input value={reviewer} onChange={e => setReviewer(e.target.value)} required /></label>}
-      {kind === 'merge' && <label>Expected head SHA<input value={headSha} onChange={e => setHeadSha(e.target.value)} required pattern="[a-fA-F0-9]{40}" /></label>}
+      {kind === 'merge' && <p>Tangle captures the current PR version from GitHub when you queue this merge. If new commits arrive before Apply, you’ll need to queue it again.</p>}
       {kind === 'close' && <p>Closes this PR without posting a comment. Queue a separate comment if needed.</p>}
-      <button disabled={save.isPending}>Queue action</button><button type="button" onClick={onClose}>Cancel</button>
+      <button disabled={save.isPending}>{save.isPending && kind === 'merge' ? 'Checking PR version…' : 'Queue action'}</button><button type="button" disabled={save.isPending} onClick={onClose}>Cancel</button>
       {onLocalDecision && <button type="button" onClick={onLocalDecision}>Record decision without GitHub action</button>}
       {save.error && <p role="alert">{save.error.message}</p>}
     </form></dialog>
@@ -39,7 +38,8 @@ function Confirmation({ action, onClose }: { action: Action; onClose: () => void
     <h2 id="apply-heading">Confirm GitHub action</h2><p><b>{action.prId}</b> · {action.kind}</p>
     {action.kind === 'comment' && <pre className="confirmation-text">{payload.Text}</pre>}
     {action.kind === 'request_review' && <p>Request review from <b>{payload.Reviewer}</b>.</p>}
-    {action.kind === 'merge' && <p>Merge using a merge commit at head <code>{payload.HeadSha}</code>.</p>}
+    {action.kind === 'merge' && <><p>Merge the PR version captured when this action was queued, using a merge commit. New commits will block this action.</p>
+      <details><summary>Captured version</summary><code>{payload.HeadSha}</code></details></>}
     {action.kind === 'close' && <p>Close the PR without a comment.</p>}
     <button disabled={apply.isPending} onClick={() => apply.mutate()}>Confirm and apply</button><button disabled={apply.isPending} onClick={onClose}>Cancel</button>
     {apply.error && <p role="alert">{apply.error.message}</p>}</dialog>
@@ -57,7 +57,7 @@ export function Receipt() {
     {queued.length === 0 && <p>Decisions land here.</p>}
     {queued.map(a => <div className="receipt-item" key={a.id}><b>{a.kind} · {a.prId}</b><span className="receipt-payload">{(() => {
       const p: { Text?: string; Reviewer?: string; HeadSha?: string } = JSON.parse(a.payload)
-      return p.Text ?? p.Reviewer ?? p.HeadSha ?? 'Close without comment'
+      return a.kind === 'merge' ? 'Merge captured PR version' : p.Text ?? p.Reviewer ?? 'Close without comment'
     })()}</span>
       <button onClick={() => remove.mutate(a.id)}>Remove</button>
       <button disabled={!policy.data?.enabled || a.prId.split('#')[0] !== policy.data.sandboxRepo} onClick={() => setConfirm(a)}>Apply</button>
