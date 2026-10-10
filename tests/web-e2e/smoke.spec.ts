@@ -1,4 +1,20 @@
 import { test, expect } from '../../web/node_modules/@playwright/test'
+import { findStacks } from '../../web/src/board/stacks'
+import type { Card } from '../../web/src/api/client'
+
+test('stack detection excludes forks, cycles, cross-repo matches and batches', () => {
+  const card = (id: string, headRef: string, baseRef: string, repoId = 'example/repo'): Card => ({
+    id, headRef, baseRef, repoId, number: 1, title: '', author: 'viewer', isMine: true, state: 'OPEN',
+    isDraft: false, createdAt: '', updatedAt: '', facts: null, batchId: null,
+  })
+  const root = card('one', 'first', 'main'), child = card('two', 'second', 'first')
+  expect(findStacks([child, root]).map(s => s.map(c => c.id))).toEqual([['one', 'two']])
+  expect(findStacks([root, child, card('three', 'third', 'first')])).toEqual([])
+  expect(findStacks([root, child, card('duplicate', 'first', 'other')])).toEqual([])
+  expect(findStacks([root, { ...child, repoId: 'another/repo' }])).toEqual([])
+  expect(findStacks([root, { ...child, batchId: 'batch' }])).toEqual([])
+  expect(findStacks([card('one', 'first', 'second'), child])).toEqual([])
+})
 
 async function unlock(page: import('../../web/node_modules/@playwright/test').Page, path = '/') {
   await page.goto(path)
@@ -91,6 +107,33 @@ test('all-mine board explains why there are no other PRs to dim', async ({ page 
   })
   await unlock(page)
   await expect(page.getByRole('button', { name: 'No others’ PRs to dim' })).toBeDisabled()
+})
+test('branch chain is ordered without internal yarn clutter and every PR opens', async ({ page }) => {
+    await page.route('**/api/board', async route => {
+      const response = await route.fetch()
+      const board = await response.json()
+      const original = board.cards.find((c: { number: number }) => c.number === 49)
+      board.cards = [4, 2, 1, 3].map(number => ({ ...original, id: `example/stack#${number}`, repoId: 'example/stack',
+        number, title: `Milestone ${number}`, batchId: null, headRef: `milestone/${number}`, baseRef: number === 1 ? 'main' : `milestone/${number - 1}` }))
+      board.strings = [1, 2, 3].flatMap(a => [2, 3, 4].filter(b => b > a).map(b => ({
+        id: `rule-${a}-${b}`, aRef: `pr:example/stack#${a}`, bRef: `pr:example/stack#${b}`, source: 'rule', rule: 'file_overlap',
+        reason: 'shared files', status: 'tied'
+      })))
+      await route.fulfill({ json: board })
+    })
+    await page.route('**/api/prs/example/stack/*', route => {
+      const number = Number(route.request().url().split('/').at(-1))
+      return route.fulfill({ json: { body: `Description ${number}`, threads: [], events: [], strings: [] } })
+    })
+    await unlock(page)
+    await expect(page.locator('.branch-stack')).toHaveCount(1)
+    await expect(page.locator('.stack-heading')).toContainText('4 stacked PRs')
+    await expect(page.locator('.stack-member .card-meta b')).toHaveText(['#1', '#2', '#3', '#4'])
+    await expect(page.locator('.yarn-tag')).toHaveCount(0)
+    for (const number of [1, 2, 3, 4]) {
+      await page.getByRole('button', { name: new RegExp(`example/stack #${number},`) }).click()
+      await expect(page.getByRole('heading', { name: `Milestone ${number}` })).toBeVisible()
+    }
 })
 test('settings persists bot logins and removed debug path is gone', async ({ page }) => {
   await unlock(page, '/settings')

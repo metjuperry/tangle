@@ -72,3 +72,5 @@ Approve checkpoint C before any editing features are added. **M4 has not started
 After Metju's feedback, the red check-mark tag was moved above the node layer so cards/zones cannot intercept its clicks. It now has a larger, centered target and an "Explain this connection" tooltip; the legend explains what to click.
 
 "Dim others' PRs" refers to **authorship**, not whose turn it is. If every PR belongs to you, the button now says "No others' PRs to dim" and is disabled. On mixed boards, other-authored cards fade to 30% while yours remain fully visible. Pointer/keyboard tag activation, actual opacity changes, and the all-mine state have browser regressions.
+
+Branch-stacked PRs now appear together in base-first order with a dependency spine instead of a complete web of internal yarns. Every member opens its own card back; internal relationship reasons stay there, and external yarn remains visible. Detection uses same-repo head/base branches, independently of which rule currently occupies each pair's unique string row. Forks, cycles and ambiguous duplicate branch heads are left ungrouped. This is distinct from title-based batches.

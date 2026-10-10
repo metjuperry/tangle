@@ -3,11 +3,12 @@ import { ReactFlow, ReactFlowProvider, Handle, Position, EdgeLabelRenderer, Base
 import '@xyflow/react/dist/style.css'
 import { turnLabel, type Board, type Card, type Yarn } from '../api/client'
 import { useBoardUi } from './store'
+import { findStacks } from './stacks'
 
 type ZoneData = { title: string; mine: number; others: number; width: number; height: number }
-type CardData = { card: Card; members: Card[] }
+type CardData = { card: Card; members: Card[]; stack?: boolean }
 type Zone = Node<ZoneData, 'zone'>
-type PrNode = Node<CardData, 'pr' | 'batch'>
+type PrNode = Node<CardData, 'pr' | 'batch' | 'stack'>
 type YarnData = { yarn: Yarn }
 type YarnLink = Edge<YarnData, 'yarn'>
 
@@ -16,7 +17,7 @@ function ZoneNode({ data }: NodeProps<Zone>) {
     <div className="zone-tape"><b>{data.title}</b> · {data.mine} yours{data.others > 0 && `, ${data.others} others`}</div>
   </div>
 }
-function PrCardNode({ data }: NodeProps<PrNode>) {
+function CardPaper({ data }: { data: CardData }) {
   const { card, members } = data
   const selected = useBoardUi(s => s.selection)
   const select = useBoardUi(s => s.select)
@@ -40,6 +41,20 @@ function PrCardNode({ data }: NodeProps<PrNode>) {
     </button>
   </div>
 }
+function PrCardNode({ data }: NodeProps<PrNode>) {
+  return <CardPaper data={data} />
+}
+function StackNode({ data }: NodeProps<PrNode>) {
+  return <div className="branch-stack">
+    <Handle type="target" position={Position.Top} id="pin-in" isConnectable={false} />
+    <Handle type="source" position={Position.Top} id="pin-out" isConnectable={false} />
+    <div className="stack-heading">{data.members.length} stacked PRs <span>base first</span></div>
+    <div className="stack-members">{data.members.map((card, index) => <div className="stack-member" key={card.id}>
+      {index > 0 && <span className="stack-dependency" aria-label={`Depends on #${data.members[index - 1].number}`}>depends on #{data.members[index - 1].number}</span>}
+      <CardPaper data={{ card, members: [card] }} />
+    </div>)}</div>
+  </div>
+}
 function YarnEdge({ sourceX, sourceY, targetX, targetY, data }: EdgeProps<YarnLink>) {
   const select = useBoardUi(s => s.selectString)
   if (!data) return null
@@ -56,7 +71,7 @@ function YarnEdge({ sourceX, sourceY, targetX, targetY, data }: EdgeProps<YarnLi
       title="Explain this connection"
       onClick={() => select(data.yarn.id)}>✓</button></EdgeLabelRenderer></>
 }
-const nodeTypes = { zone: ZoneNode, pr: PrCardNode, batch: PrCardNode }
+const nodeTypes = { zone: ZoneNode, pr: PrCardNode, batch: PrCardNode, stack: StackNode }
 const edgeTypes = { yarn: YarnEdge }
 const rank = (p: Card) => p.facts?.turn === 'me' ? 0 : p.facts?.turn === 'nobody' ? 1 : 2
 
@@ -68,23 +83,31 @@ function layout(board: Board): { nodes: (Zone | PrNode)[]; edges: YarnLink[] } {
   for (const [index, repo] of repos.entries()) {
     const cards = board.cards.filter(p => p.repoId === repo)
     const groups = new Map<string, Card[]>()
+    const stacks = findStacks(cards)
+    const stackIds = new Set(stacks.map(s => `stack:${s[0].id}`))
+    const stackByCard = new Map(stacks.flatMap(s => s.map(c => [c.id, `stack:${s[0].id}`] as const)))
     for (const card of cards) {
-      const id = card.batchId ?? card.id
+      const id = stackByCard.get(card.id) ?? card.batchId ?? card.id
       groups.set(id, [...(groups.get(id) ?? []), card])
     }
-    const entries = [...groups.entries()].map(([id, members]) => ({ id, members: [...members].sort((a, b) => rank(a) - rank(b) || (b.facts?.idleDays ?? 0) - (a.facts?.idleDays ?? 0) || a.number - b.number) }))
+    const entries = [...groups.entries()].map(([id, members]) => ({ id, stack: stackIds.has(id),
+      members: stackIds.has(id) ? stacks.find(s => `stack:${s[0].id}` === id)! :
+        [...members].sort((a, b) => rank(a) - rank(b) || (b.facts?.idleDays ?? 0) - (a.facts?.idleDays ?? 0) || a.number - b.number) }))
       .sort((a, b) => rank(a.members[0]) - rank(b.members[0]) || (b.members[0].facts?.idleDays ?? 0) - (a.members[0].facts?.idleDays ?? 0) || a.members[0].number - b.members[0].number)
     const columns = Math.min(3, Math.max(1, Math.ceil(Math.sqrt(entries.length))))
     const width = columns * 200 + 32
-    const height = Math.ceil(entries.length / columns) * 136 + 68
+    const rowHeights = Array.from({ length: Math.ceil(entries.length / columns) }, (_, row) =>
+      Math.max(...entries.slice(row * columns, (row + 1) * columns).map(e => e.stack ? 52 + e.members.length * 142 : 136)))
+    const height = rowHeights.reduce((sum, h) => sum + h, 0) + 68
     if (index > 0 && index % 2 === 0) { x = 24; y += rowHeight + 36; rowHeight = 0 }
     const zoneId = `zone:${repo}`
     nodes.push({ id: zoneId, type: 'zone', position: { x, y }, data: { title: repo.split('/')[1], mine: cards.filter(p => p.isMine).length, others: cards.filter(p => !p.isMine).length, width, height },
       style: { width, height }, selectable: false, draggable: false })
-    entries.forEach(({ id, members }, i) => {
-      nodes.push({ id, type: members.length > 1 ? 'batch' : 'pr', parentId: zoneId, extent: 'parent',
-        position: { x: 24 + (i % columns) * 200, y: 56 + Math.floor(i / columns) * 136 }, data: { card: members[0], members },
-        style: { width: 176, height: 110 }, draggable: false, selectable: false })
+    entries.forEach(({ id, members, stack }, i) => {
+      nodes.push({ id, type: stack ? 'stack' : members.length > 1 ? 'batch' : 'pr', parentId: zoneId, extent: 'parent',
+        position: { x: 24 + (i % columns) * 200, y: 56 + rowHeights.slice(0, Math.floor(i / columns)).reduce((sum, h) => sum + h, 0) },
+        data: { card: members[0], members, stack },
+        style: { width: 176, height: stack ? 52 + members.length * 142 : 110 }, draggable: false, selectable: false })
       members.forEach(p => mapped.set(`pr:${p.id}`, id))
     })
     x += width + 36; rowHeight = Math.max(rowHeight, height)
@@ -104,7 +127,7 @@ export function BoardView({ board }: { board: Board }) {
     <ReactFlowProvider><ReactFlow nodes={graph.nodes} edges={graph.edges} nodeTypes={nodeTypes} edgeTypes={edgeTypes}
       fitView fitViewOptions={{ padding: .12, maxZoom: 1 }} minZoom={.2} maxZoom={1.6} onlyRenderVisibleElements
       nodesDraggable={false} nodesConnectable={false} elementsSelectable={false} panOnDrag zoomOnScroll
-      onNodeClick={(_, node) => { if (node.type !== 'zone') select((node.data as CardData).card.id) }}
+      onNodeClick={(_, node) => { if (node.type !== 'zone' && node.type !== 'stack') select((node.data as CardData).card.id) }}
       proOptions={{ hideAttribution: false }}><Controls showInteractive={false} /></ReactFlow></ReactFlowProvider>
     <div className="board-legend"><span><i className="legend-pin me" />your turn</span><span><i className="legend-pin them" />waiting on others</span>
       <span><i className="legend-pin nobody" />nobody’s turn</span><span><i className="legend-yarn" />rule link · click its ✓ to read why</span><span>yellowed paper = open over 40 days</span></div>

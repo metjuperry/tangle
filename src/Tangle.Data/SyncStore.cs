@@ -113,7 +113,8 @@ public sealed partial class SyncStore(Database database, TimeProvider? clock = n
         var rows = await db.QueryAsync<BoardCard>(new CommandDefinition("""
             SELECT p.id AS Id, p.repo_id AS RepoId, p.number AS Number, p.title AS Title, p.author AS Author,
               p.is_mine AS IsMine, p.state AS State, p.is_draft AS IsDraft, p.updated_at AS UpdatedAt,
-              p.created_at AS CreatedAt, p.content_hash AS ContentHash, p.batch_id AS BatchId
+              p.created_at AS CreatedAt, p.content_hash AS ContentHash, p.batch_id AS BatchId,
+              p.head_ref AS HeadRef, p.base_ref AS BaseRef
             FROM pr p JOIN repo r ON r.id=p.repo_id
             WHERE (@includeClosed=1 OR p.state='OPEN') AND r.watched=1
               AND NOT EXISTS (
@@ -134,4 +135,6 @@ public sealed record BoardCard(string Id, string RepoId, long Number, string Tit
     public BoardCard() : this("", "", 0, "", null, false, "", false, "", "", "") { }
     public PrFacts? Facts { get; init; }
     public string? BatchId { get; init; }
+    public string HeadRef { get; init; } = "";
+    public string BaseRef { get; init; } = "";
 }
