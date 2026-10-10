@@ -89,7 +89,7 @@ test('opening stale board syncs once while fresh board does not', async ({ page 
   await unlock(page)
   await expect.poll(() => syncs).toBe(1)
   await expect(page.locator('[data-testid="card-example/repo#49"]')).toContainText('Updated from fixture sync')
-  await page.unroute('**/api/board')
+  await page.unrouteAll({ behavior: 'wait' })
   await page.reload()
   await expect(page.getByRole('region', { name: 'Yarn board' })).toBeVisible()
   expect(syncs).toBe(1)
