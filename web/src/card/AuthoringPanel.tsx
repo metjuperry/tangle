@@ -9,8 +9,8 @@ export function Notes({ board, targetRef }: { board: Board; targetRef: string })
   const save = useMutation({ mutationFn: () => write('/api/notes', 'POST', { targetRef, text }),
     onSuccess: async () => { setText(''); await client.invalidateQueries({ queryKey: ['board'] }) } })
   return <><h3>Your notes</h3>{(board.notes ?? []).filter(n => n.targetRef === targetRef).map(n => <p className="handwriting" key={n.id}>{n.text}</p>)}
-    <form onSubmit={e => { e.preventDefault(); save.mutate() }}><label>Add a note<textarea value={text} onChange={e => setText(e.target.value)} required /></label>
-      <button disabled={save.isPending}>Pin it</button></form>{save.error && <p role="alert">{save.error.message}</p>}</>
+    <form className="handwritten-composer" onSubmit={e => { e.preventDefault(); save.mutate() }}><label>Add a note<textarea value={text} onChange={e => setText(e.target.value)} required placeholder="Leave a thread for future you…" rows={2} /></label>
+      <button className="paper-action" disabled={save.isPending}>Pin it</button></form>{save.error && <p role="alert">{save.error.message}</p>}</>
 }
 export function StringEditor({ yarn, board }: { yarn: Yarn; board: Board }) {
   const [label, setLabel] = useState(yarn.label ?? '')
@@ -19,8 +19,8 @@ export function StringEditor({ yarn, board }: { yarn: Yarn; board: Board }) {
   const mutation = useMutation({ mutationFn: (body: object) => write('/api/links/' + yarn.id, 'PATCH', body),
     onSuccess: async () => { await client.invalidateQueries({ queryKey: ['board'] }); await client.invalidateQueries({ queryKey: ['pr'] }) } })
   return <><p className="eyebrow">{yarn.source === 'me' ? 'Tied by you' : 'Linked by a rule'}</p><h2>These belong together</h2>
-    <p>{yarn.reason}</p><form onSubmit={e => { e.preventDefault(); mutation.mutate({ label }) }}>
-      <label>Label the string<input value={label} onChange={e => setLabel(e.target.value)} placeholder="same customer release" /></label><button>Save label</button></form>
+    <p>{yarn.reason}</p><form className="handwritten-composer" onSubmit={e => { e.preventDefault(); mutation.mutate({ label }) }}>
+      <label>Label the string<input value={label} onChange={e => setLabel(e.target.value)} placeholder="same customer release" /></label><button className="paper-action navy-action" disabled={mutation.isPending}>Save label</button></form>
     {yarn.label && <p className="handwriting">{yarn.label}</p>}
     {[yarn.aRef, yarn.bRef].map(ref => <button className="related-card" key={ref} onClick={() => select(ref.startsWith('sticky:') ? ref : ref.slice(3))}>{ref.replace(/^pr:/, '')}</button>)}
     <button onClick={() => mutation.mutate({ status: yarn.status === 'cut' ? 'tied' : 'cut' })}>{yarn.status === 'cut' ? 'Re-tie string' : 'Cut the string'}</button>

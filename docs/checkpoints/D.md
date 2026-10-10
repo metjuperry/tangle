@@ -60,4 +60,6 @@ See [DECISIONS](../DECISIONS.md). Remote CI is still not claimed green until Git
 
 Review fixes: select any separated stack member and use **Group stack again** to restore the automatic dependency group. This clears only that stack's saved PR positions; ties, notes and all other positions remain. Sticky creation now lives in the top-bar **New sticky** button and opens a cancellable dialog, rather than appearing in every card's context.
 
+Note and string-label editors now use handwriting inputs with compact paper-and-ink actions; saving a string label uses navy to match your yarn. Other authoring controls and the sticky dialog use the same paper borders and button sizing rather than browser-default styling.
+
 Tie three real business links, make one goal sticky, and arrange your cards. Check persistence after sync and browser restart. Approve checkpoint D only after authoring feels reliable; **M5 has not started**.
