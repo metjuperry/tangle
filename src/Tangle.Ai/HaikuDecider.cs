@@ -9,6 +9,7 @@ namespace Tangle.Ai;
 public sealed class HaikuDecider(AnthropicClient client) : IDecider
 {
     public const string ModelId = "claude-haiku-5-5";
+    public const int MaximumInputBytes = 60000;
     public string Name => "haiku-5-5";
     public AiUsage? LastUsage { get; private set; }
     public static string Prompt(string job)
@@ -38,16 +39,17 @@ public sealed class HaikuDecider(AnthropicClient client) : IDecider
 
     private async Task<string> SendAsync(string job, object input, string schema, int maxTokens, CancellationToken ct)
     {
-        LastUsage = null;
-        var serialized = JsonSerializer.Serialize(input, Json);
-        if (serialized.Length > 60000) throw new InvalidOperationException("AI input exceeds the reserved-cost safety limit.");
+        LastUsage = new(0, 0, 0, 0);
+        var serialized = SerializeInput(input);
         var watch = Stopwatch.StartNew();
-        var response = await client.Messages.Create(new MessageCreateParams
+        var parameters = new MessageCreateParams
         {
             Model = ModelId, MaxTokens = maxTokens, System = Prompt(job),
             Messages = [new() { Role = Role.User, Content = serialized }],
             OutputConfig = new() { Format = new() { Schema = JsonSerializer.Deserialize<Dictionary<string, JsonElement>>(schema)! } }
-        }, ct);
+        };
+        LastUsage = null;
+        var response = await client.Messages.Create(parameters, ct);
         var inputTokens = response.Usage.InputTokens;
         var outputTokens = response.Usage.OutputTokens;
         LastUsage = new(inputTokens, outputTokens, inputTokens * .10m / 1_000_000 + outputTokens * .50m / 1_000_000, watch.ElapsedMilliseconds);
@@ -56,6 +58,13 @@ public sealed class HaikuDecider(AnthropicClient client) : IDecider
         var text = response.Content.Select(b => b.Value).OfType<TextBlock>().Select(b => b.Text).ToArray();
         if (text.Length != 1) throw new InvalidOperationException("Haiku returned missing or multiple answer blocks.");
         return text[0];
+    }
+    public static string SerializeInput(object input)
+    {
+        var serialized = JsonSerializer.Serialize(input, Json);
+        if (System.Text.Encoding.UTF8.GetByteCount(serialized) > MaximumInputBytes)
+            throw new InvalidOperationException("A single AI context exceeds the 60 KB request limit. No provider call was made.");
+        return serialized;
     }
     public static PrJudgment ParseVerdict(string json)
     {

@@ -12,7 +12,7 @@ Repo AI switches default off. Context includes only enabled repositories; disabl
 
 Successful results are cached by model, prompt content and complete bounded input. Verdicts and `?` strings appear through query invalidation. You tie/cut proposals; nothing applies to GitHub.
 
-The on-demand worker runs after successful sync, never on a schedule. Monthly USD budget defaults to $1 and is editable in Settings. Calls reserve conservative maximum cost before dispatch, record tokens/cost/latency, and retain a reservation when an interrupted call's usage is unknown. Recent call status is shown in Settings. An exhausted budget stops provider calls and emits a warning.
+ Monthly USD budget defaults to $1 and is editable in Settings. Calls reserve conservative maximum cost before dispatch, record tokens/cost/latency, and retain a reservation when an interrupted call's usage is unknown. Recent call status is shown in Settings. An exhausted budget stops provider calls and emits a warning.
 
 ## Run safely first
 
@@ -48,6 +48,8 @@ The implementing agent stops before doing these steps. Enabling AI is not implie
 Read next-step proposals on ten cards, compare reasons with their computed facts, and inspect every dashed `?` string. Tie or cut each proposal; verify those decisions survive sync. Inspect recent call costs in Settings. Sync again unchanged: cached verdicts and candidate answers should avoid repeated calls.
 
 ## Deviations and open questions
+
+Pair requests are now packed by serialized UTF-8 payload size as well as the 20-pair maximum. Large repeated PR contexts are split into smaller requests instead of aborting the pass. This 60 KB per-request bound is separate from the monthly USD budget. Requests rejected before dispatch have zero usage; migration 0007 releases only reservations bearing the exact old pre-dispatch size error. Unknown network usage remains conservatively reserved.
 
 - The model and pricing were checked against current Anthropic documentation. Base pricing used is $0.10/M input tokens and $0.50/M output tokens; requests are bounded below the 100k-token tier.
 - Conservative per-call reservations are $0.02 for verdicts and $0.20 for a pair batch. Unknown interrupted usage remains reserved rather than silently treated as free.

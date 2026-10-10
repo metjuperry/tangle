@@ -37,6 +37,7 @@ public sealed class AiWorker(IAiStore store, HaikuDecider decider, ILiveEvents e
         {
             var hash = Hash("verdict", pr);
             if (await store.CachedAsync(hash, ct)) continue;
+            HaikuDecider.SerializeInput(pr);
             // Reserve a conservative bound before any provider call; unresolved calls retain the reservation.
             var reservation = await store.ReserveAsync(hash, decider.Name, .02m, ct, "verdict", [pr.Ref]);
             if (reservation is null) { events.Publish("ai.budget", new { reached = true }); return; }
@@ -59,9 +60,8 @@ public sealed class AiWorker(IAiStore store, HaikuDecider decider, ILiveEvents e
             }
         }
         var pairs = Candidates(snapshot);
-        for (var i = 0; i < pairs.Count; i += 20)
+        foreach (var batch in Batches(pairs))
         {
-            var batch = pairs.Skip(i).Take(20).ToArray();
             var hash = Hash("pairs", batch);
             if (await store.CachedAsync(hash, ct)) continue;
             var current = await store.SnapshotAsync(ct);
@@ -85,6 +85,25 @@ public sealed class AiWorker(IAiStore store, HaikuDecider decider, ILiveEvents e
                 throw;
             }
         }
+    }
+    public static IReadOnlyList<PairContext[]> Batches(IReadOnlyList<PairContext> pairs)
+    {
+        var result = new List<PairContext[]>();
+        var current = new List<PairContext>();
+        foreach (var pair in pairs)
+        {
+            HaikuDecider.SerializeInput(new[] { pair });
+            var candidate = current.Append(pair).ToArray();
+            var bytes = Encoding.UTF8.GetByteCount(JsonSerializer.Serialize(candidate, HaikuDecider.Json));
+            if (current.Count > 0 && (candidate.Length > 20 || bytes > HaikuDecider.MaximumInputBytes))
+            {
+                result.Add(current.ToArray());
+                current.Clear();
+            }
+            current.Add(pair);
+        }
+        if (current.Count > 0) result.Add(current.ToArray());
+        return result;
     }
     public static string Hash(string job, object input) =>
         Convert.ToHexString(SHA256.HashData(Encoding.UTF8.GetBytes(HaikuDecider.ModelId + "\n" +

@@ -12,6 +12,32 @@ public sealed class DeciderTests
         new(reference, "example/repo", "Connector metadata", "Description", "viewer", "2026-10-01T00:00:00Z",
             ["src/connector.cs"], new("me", "4 open review comments", 14, 7, null, false, "M", "agent"), ["Please fix"], []);
     [Fact]
+    public void LargePairSetsSplitByPayloadSizeWithoutDroppingPairs()
+    {
+        var pairs = Enumerable.Range(1, 45).Select(i => new PairContext(
+            $"pr:example/repo#{i}", $"pr:example/repo#{i + 100}",
+            Context($"pr:example/repo#{i}") with { Body = new string('x', 4000) },
+            Context($"pr:example/repo#{i + 100}") with { Body = new string('y', 4000) }, null)).ToArray();
+        Assert.True(System.Text.Encoding.UTF8.GetByteCount(JsonSerializer.Serialize(pairs.Take(20), HaikuDecider.Json)) > 60000);
+        var batches = AiWorker.Batches(pairs);
+        Assert.Equal(pairs, batches.SelectMany(b => b).ToArray());
+        Assert.All(batches, batch =>
+        {
+            Assert.InRange(batch.Length, 1, 20);
+            Assert.InRange(System.Text.Encoding.UTF8.GetByteCount(HaikuDecider.SerializeInput(batch)), 1, HaikuDecider.MaximumInputBytes);
+        });
+        Assert.Equal(3, AiWorker.Batches(pairs.Select(p => p with { A = Context(), B = Context() }).ToArray()).Count);
+    }
+    [Fact]
+    public async Task RejectedInputHasZeroUsageAndNeverReachesProvider()
+    {
+        var handler = new RecordedHandler();
+        var decider = new HaikuDecider(new AnthropicClient { ApiKey = "fake", HttpClient = new HttpClient(handler), MaxRetries = 0 });
+        await Assert.ThrowsAsync<InvalidOperationException>(() => decider.JudgePrAsync(Context() with { Body = new string('x', 60001) }, default));
+        Assert.Equal("", handler.Request);
+        Assert.Equal(0m, decider.LastUsage!.Cost);
+    }
+    [Fact]
     public void VerdictValidatesEnumsRequiredFieldsAndClampsPriority()
     {
         var verdict = HaikuDecider.ParseVerdict("""{"action":"fix","confidence":0.9,"priority":99,"reason":"4 open review comments","intent":"Add metadata"}""");
