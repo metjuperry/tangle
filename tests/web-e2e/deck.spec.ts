@@ -248,6 +248,8 @@ test('Untangle keys, queue, exact confirmation, undo and full deck', async ({ pa
   await expect(page.locator('.verdict-bar')).toHaveCount(0)
   await expect(page.locator('.deck-progress')).toHaveCount(0)
   await expect(page.locator('.untangle-complete')).toBeVisible()
+  await expect(page.getByRole('button', { name: 'Undo last decision · U' })).toHaveCSS('background-color', 'rgb(251, 246, 234)')
+  await expect(page.getByRole('button', { name: 'Undo last decision · U' })).toHaveCSS('text-decoration-line', 'none')
   await expect(page.getByRole('link', { name: 'Back to the board', exact: true })).toBeVisible()
   await page.keyboard.press('u')
   await expect(page.getByRole('button', { name: 'Wait W', exact: true })).toBeEnabled()

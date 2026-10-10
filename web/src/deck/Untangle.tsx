@@ -68,7 +68,7 @@ export function Untangle({ board }: { board: Board }) {
     </motion.div></AnimatePresence>
     {card && <div className="verdict-bar">{choices.map(([choice, label, key]) => <button key={choice} disabled={decide.isPending}
       className={card.verdict?.action === choice ? 'suggested-choice' : ''} onClick={() => choose(choice)}>{label}<small>{key}</small></button>)}</div>}
-    {!!decisions.data?.length && <button className={card ? undefined : 'completion-undo'} disabled={undo.isPending} onClick={() => undo.mutate()}>Undo last decision · U</button>}
+    {!!decisions.data?.length && <button disabled={undo.isPending} onClick={() => undo.mutate()}>Undo last decision · U</button>}
     {((decide.error && !composer) || undo.error) && <p role="alert">{decide.error?.message ?? undo.error?.message}</p>}
     {composer && card && <ActionComposer prId={card.id} initialKind={composerKind} allowStillMyTurn={allowStillMyTurn}
       onClose={() => setComposer(false)} onQueued={actionId => decide.mutate({ choice: pendingChoice, actionId })}
