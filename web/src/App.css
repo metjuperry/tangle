@@ -97,6 +97,21 @@ a { color: var(--yarn); }
 .login-wrap, .settings-wrap { padding: 48px 24px; overflow: auto; }
 .login-paper, .settings-page { padding: 24px; background: var(--paper); max-width: 700px; box-shadow: 0 4px 12px #221c1540; }
 .settings-page label, .login-paper label { display: grid; gap: 8px; }.settings-page input, .settings-page select, .login-paper input { padding: 10px; margin: 8px 0; }.settings-page button, .login-paper button { padding: 10px; margin: 8px 0; }.settings-page input[type=checkbox] { padding: 0; }
+.settings-page { max-width: 1000px; margin: 0 auto; padding: 0; border-radius: 6px; overflow: hidden; }
+.settings-heading { padding: 28px 32px 20px; }.settings-heading h1 { margin: 0 0 8px; font-size: 30px; }.settings-heading p { margin: 0; color: #5e564b; }
+.settings-section { padding: 24px 32px; border-top: 1px solid #d9cdb8; }.settings-section h2 { margin: 0 0 10px; font-size: 19px; }.settings-section > p { font-size: 14px; line-height: 21px; max-width: 760px; }
+.settings-rows { display: grid; gap: 8px; margin: 20px 0; }
+.settings-row { display: flex; align-items: center; gap: 20px; justify-content: space-between; padding: 14px 16px; background: #fffdf8; border: 1px solid #e2d7c3; border-radius: 5px; }
+.settings-identity { display: grid; gap: 5px; min-width: 0; }.settings-identity b { font-family: 'IBM Plex Mono',monospace; font-size: 13px; overflow-wrap: anywhere; }.settings-identity small { font-size: 12px; color: #5e564b; }
+.settings-toggles { display: flex; gap: 12px; flex-shrink: 0; }
+.settings-page label.settings-check { display: flex; align-items: center; gap: 8px; font-size: 13px; font-weight: 700; white-space: nowrap; padding: 8px 10px; border-radius: 4px; background: #fbf6ea; cursor: pointer; }
+.settings-page .settings-check input { width: 18px; height: 18px; margin: 0; padding: 0; accent-color: var(--ink); flex-shrink: 0; }.settings-page .ai-check input { accent-color: var(--mine-yarn); }
+.settings-add-form { display: flex; align-items: flex-end; flex-wrap: wrap; gap: 12px; padding: 14px 16px; background: #f1eadb; border: 1px dashed #cfc3ac; border-radius: 5px; }
+.settings-add-form label { flex: 1 1 180px; font-size: 12px; color: #5e564b; }.settings-page input:not([type=checkbox]),.settings-page select { min-height: 44px; width: 100%; border: 1px solid #cfc3ac; border-radius: 4px; background: #fffdf8; color: var(--ink); margin: 0; }.settings-page button { min-height: 44px; border: 1px solid var(--ink); border-radius: 5px; background: var(--paper); color: var(--ink); font-weight: 700; margin: 0; padding: 10px 16px; }
+.settings-page .provider-status { padding: 12px 16px; border-left: 3px solid #8c857b; background: #f1eadb; border-radius: 3px; }.settings-page .provider-enabled { border-left-color: var(--mine-yarn); }
+.settings-page .budget-field { max-width: 240px; font-size: 12px; }.ai-call-row { font-family: 'IBM Plex Mono',monospace; font-size: 12px; padding: 10px; border-bottom: 1px solid #e2d7c3; overflow-wrap: anywhere; }
+.settings-save { padding: 20px 32px; background: #eee5d4; border-top: 1px solid #cfc3ac; display: flex; align-items: center; gap: 16px; flex-wrap: wrap; }.settings-save > span { flex: 1; font-size: 13px; color: #5e564b; }.settings-save button { background: var(--ink); color: var(--paper); }.settings-save p { width: 100%; margin: 0; }
+@media(max-width: 650px) { .settings-row { align-items: flex-start; flex-direction: column; gap: 10px; }.settings-section,.settings-heading,.settings-save { padding: 20px; }.settings-toggles { flex-wrap: wrap; }.settings-wrap { padding: 20px 12px; } }
 @media(max-width: 900px) { .header-counts, .knot-meter { display: none; }.side-panel { flex-basis: 300px; padding: 16px; }.top-bar { gap: 8px; padding: 10px; } }
 @media(max-width: 620px) { .board-workspace { flex-direction: column; }.board-cork { min-height: 55dvh; }.side-panel { flex-basis: 45dvh; }.view-switch { display: none; } }
 @media(prefers-reduced-motion: reduce) { *, *::before, *::after { scroll-behavior: auto !important; transition: none !important; animation: none !important; } }

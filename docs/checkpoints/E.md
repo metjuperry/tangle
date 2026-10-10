@@ -16,6 +16,8 @@ The on-demand worker runs after successful sync, never on a schedule. Monthly US
 
 ## Run safely first
 
+Settings is organized into bordered sections for owners, repository permissions, AI privacy/budget, bot detection and recent calls. Each repo has independently labelled Watch and Allow AI controls; the page has one save bar at the bottom. No permission is changed just by this layout update.
+
 ```sh
 cd web
 npm ci

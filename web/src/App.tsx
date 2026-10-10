@@ -30,33 +30,47 @@ function SettingsPage() {
   })
   if (settings.error) return <p role="alert">{settings.error.message}</p>
   if (!value) return <p>Loading settings…</p>
-  return <section className="settings-page"><h1>Settings</h1><p>Tokens belong in user-secrets or your environment, never here.</p>
-    <h2>AI privacy and budget</h2><p>AI is opt-in per repository. Enabling a switch permits sending its titles, descriptions, changed paths, review excerpts and linked labels to Anthropic. Never diffs or file contents. Check client policy first.</p>
-    <p>{aiStatus.data?.enabled ? 'Provider calls enabled on the server.' : 'Provider calls disabled on the server. Set Ai:Enabled only when ready to authorize paid API usage.'}</p>
-    <label>Monthly AI budget (USD)<input type="number" min="0" max="100" step="0.01" value={value.aiBudget ?? 1}
-      onChange={e => setDraft({ ...value, aiBudget: Number(e.target.value) })} /></label>
-    <h2>Watched owners</h2>
-    {value.owners.map((o, i) => <label key={o.id}><span><input type="checkbox" checked={o.watched}
-      onChange={e => setDraft({ ...value, owners: value.owners.map((item, j) => j === i ? { ...item, watched: e.target.checked } : item) })} /> {o.id} ({o.kind})</span></label>)}
-    <form onSubmit={e => { e.preventDefault(); setDraft({ ...value, owners: [...value.owners, { id: owner.trim(), kind, watched: true }] }); setOwner('') }}>
+  return <section className="settings-page"><div className="settings-heading"><h1>Settings</h1><p>Choose what goes on your board and what may leave your laptop.</p></div>
+    <section className="settings-section" aria-labelledby="owners-heading"><h2 id="owners-heading">Watched owners</h2>
+    <p>Organizations and personal accounts to search for PRs involving you. Disabling an owner pauses all its repos.</p>
+    {value.owners.length === 0 && <p className="quiet">No owners added yet.</p>}
+    <div className="settings-rows">{value.owners.map((o, i) => <div className="settings-row" key={o.id}>
+      <div className="settings-identity"><b>{o.id}</b><small>{o.kind === 'org' ? 'Organization' : 'Personal account'}</small></div>
+      <label className="settings-check"><input aria-label={`Watch owner ${o.id}`} type="checkbox" checked={o.watched}
+        onChange={e => setDraft({ ...value, owners: value.owners.map((item, j) => j === i ? { ...item, watched: e.target.checked } : item) })} /> Watch</label>
+    </div>)}</div>
+    <form className="settings-add-form" onSubmit={e => { e.preventDefault(); setDraft({ ...value, owners: [...value.owners, { id: owner.trim(), kind, watched: true }] }); setOwner('') }}>
       <label>Owner name<input value={owner} onChange={e => setOwner(e.target.value)} required /></label>
       <label>Owner type<select value={kind} onChange={e => setKind(e.target.value === 'user' ? 'user' : 'org')}><option value="org">Organization</option><option value="user">Personal account</option></select></label>
       <button>Add owner</button>
-    </form>
-    <h2>Repositories</h2><p>Watched owners discover their repos during sync. Uncheck a repo to hide it; add a repo to watch it without its entire owner.</p>
-    {value.repos.map((r, i) => <label key={r.id}><span><input type="checkbox" checked={r.watched}
-      onChange={e => setDraft({ ...value, repos: value.repos.map((item, j) => j === i ? { ...item, watched: e.target.checked } : item) })} /> {r.id}</span>
-      <span><input aria-label={`Allow AI for ${r.id}`} type="checkbox" checked={r.aiAllowed}
-        onChange={e => setDraft({ ...value, repos: value.repos.map((item, j) => j === i ? { ...item, aiAllowed: e.target.checked } : item) })} /> Allow AI for this repo</span></label>)}
-    <form onSubmit={e => { e.preventDefault(); setDraft({ ...value, repos: [...value.repos, { id: repo.trim(), watched: true, aiAllowed: false }] }); setRepo('') }}>
+    </form></section>
+    <section className="settings-section" aria-labelledby="repos-heading"><h2 id="repos-heading">Repositories</h2><p>Watch controls board visibility and sync. Allow AI separately permits sending this repo’s metadata to Anthropic when server calls are enabled.</p>
+    {value.repos.length === 0 && <p className="quiet">Repos appear after sync, or add one below.</p>}
+    <div className="settings-rows">{value.repos.map((r, i) => <div className="settings-row repo-setting" key={r.id}>
+      <div className="settings-identity"><b>{r.id}</b><small>{r.aiAllowed ? 'AI permission granted' : 'AI off · metadata stays local to Tangle'}</small></div>
+      <div className="settings-toggles"><label className="settings-check"><input aria-label={`Watch repository ${r.id}`} type="checkbox" checked={r.watched}
+        onChange={e => setDraft({ ...value, repos: value.repos.map((item, j) => j === i ? { ...item, watched: e.target.checked } : item) })} /> Watch</label>
+      <label className="settings-check ai-check"><input aria-label={`Allow AI for ${r.id}`} type="checkbox" checked={r.aiAllowed}
+        onChange={e => setDraft({ ...value, repos: value.repos.map((item, j) => j === i ? { ...item, aiAllowed: e.target.checked } : item) })} /> Allow AI</label></div>
+    </div>)}</div>
+    <form className="settings-add-form" onSubmit={e => { e.preventDefault(); setDraft({ ...value, repos: [...value.repos, { id: repo.trim(), watched: true, aiAllowed: false }] }); setRepo('') }}>
       <label>Repository (owner/repo)<input value={repo} onChange={e => setRepo(e.target.value)} required /></label><button>Add repository</button>
-    </form>
-    <button disabled={save.isPending} onClick={() => save.mutate(value)}>Save settings</button>
+    </form></section>
+    <section className="settings-section" aria-labelledby="privacy-heading"><h2 id="privacy-heading">AI privacy and budget</h2>
+    <p>Only explicitly allowed repos may send titles, descriptions, changed paths, review excerpts and linked labels to Anthropic. Never diffs or file contents. Check client policy first.</p>
+    <p className={`provider-status ${aiStatus.data?.enabled ? 'provider-enabled' : ''}`}>{aiStatus.data?.enabled ? 'Provider calls enabled on the server.' : 'Provider calls disabled on the server. Set Ai:Enabled only when ready to authorize paid API usage.'}</p>
+    <label className="budget-field">Monthly AI budget (USD)<input type="number" min="0" max="100" step="0.01" value={value.aiBudget ?? 1}
+      onChange={e => setDraft({ ...value, aiBudget: Number(e.target.value) })} /></label>
+    <p className="quiet">API keys and GitHub tokens belong in user-secrets or your environment, never in this page.</p></section>
+    <section className="settings-section" aria-labelledby="bots-heading"><h2 id="bots-heading">Bot detection</h2><p>These accounts don’t count as human activity when calculating idle time and whose turn it is.</p>
     <label>Bot logins (comma-separated)<input value={value.botLogins.join(', ')}
       onChange={e => setDraft({ ...value, botLogins: e.target.value.split(',').map(s => s.trim()).filter(Boolean) })} /></label>
-    {save.error && <p role="alert">{save.error.message}</p>}{save.isSuccess && <p role="status">Settings saved.</p>}
-    <h3>Recent AI calls</h3>{aiStatus.error && <p role="alert">{aiStatus.error.message}</p>}
-    {aiStatus.data?.calls.map((call, i) => <p key={i}>{call.status} · ${call.cost.toFixed(6)} · {call.error ?? call.created_at}</p>)}
+    </section>
+    <section className="settings-section" aria-labelledby="calls-heading"><h2 id="calls-heading">Recent AI calls</h2>{aiStatus.error && <p role="alert">{aiStatus.error.message}</p>}
+    {aiStatus.data?.calls.length === 0 && <p className="quiet">No provider calls recorded.</p>}
+    {aiStatus.data?.calls.map((call, i) => <p className="ai-call-row" key={i}>{call.status} · ${call.cost.toFixed(6)} · {call.error ?? call.created_at}</p>)}</section>
+    <footer className="settings-save"><span>Changes apply only when you save.</span><button disabled={save.isPending} onClick={() => save.mutate(value)}>{save.isPending ? 'Saving…' : 'Save settings'}</button>
+    {save.error && <p role="alert">{save.error.message}</p>}{save.isSuccess && <p role="status">Settings saved.</p>}</footer>
   </section>
 }
 function Workspace() {
