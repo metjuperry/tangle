@@ -51,6 +51,10 @@ Read next-step proposals on ten cards, compare reasons with their computed facts
 
 ## Deviations and open questions
 
+AI reuse is now tracked per PR and per candidate pair, independently of request batches and prompt versions. Unchanged GitHub metadata and authored context do not trigger another call: clock-only age/idle changes, startup, sync and prompt edits are not automatic rerun triggers. Changed PR metadata, labels or sticky context can require a new judgment. Negative pair answers are retained even when no string is created. Paid/uncertain failed attempts are also remembered to prevent repeated charges for unchanged inputs; known zero-cost pre-dispatch failures can be retried.
+
+Forward migration 0009 adds look-state records without deleting existing answers. Identifiable successful prior calls are adopted when PR timestamps and authored context show no later change; older pair logs without targets cannot be reliably recovered. The Settings history shows only the latest 50 calls, so 50 displayed rows alone does not establish 50 calls on the last sync.
+
 Pair outputs now use schema-constrained numeric indices rather than asking the model to copy PR/sticky references. Tangle maps each index to its exact input pair, accepts reordered results and rejects duplicate/missing answers. Existing cached successful results remain stored; the new pair prompt/input format has a new cache key. No paid retries are triggered by the implementing agent.
 
 Prompts now request brief, plain-language reasons and intent, without internal field names. Existing AI text is displayed with known schema terms translated (for example behindBy → commits behind base); raw saved answers and your own labels/notes are unchanged. Prompt edits change cache keys, so a later user-triggered sync may regenerate allowed-repo judgments under the normal budget.

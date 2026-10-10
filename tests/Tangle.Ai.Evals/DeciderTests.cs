@@ -12,6 +12,19 @@ public sealed class DeciderTests
         new(reference, "example/repo", "Connector metadata", "Description", "viewer", "2026-10-01T00:00:00Z",
             ["src/connector.cs"], new("me", "4 open review comments", 14, 7, null, false, "M", "agent"), ["Please fix"], []);
     [Fact]
+    public void LookKeysIgnoreClockAgingButTrackPrChangesAndAuthoredContext()
+    {
+        var pr = Context() with { UpdatedAt = "2026-10-10T00:00:00Z" };
+        var aged = pr with { Facts = pr.Facts with { AgeDays = 25, IdleDays = 21, Turn = "nobody", TurnReason = "no human activity for 21 days" } };
+        var waiting = pr with { Facts = pr.Facts with { Turn = "them", TurnReason = "waiting on others" } };
+        Assert.Equal(AiCacheKeys.Verdict(waiting), AiCacheKeys.Verdict(aged));
+        Assert.Equal(AiCacheKeys.Verdict(pr), AiCacheKeys.Verdict(pr with { Facts = pr.Facts with { AgeDays = 99, IdleDays = 100 } }));
+        Assert.NotEqual(AiCacheKeys.Verdict(pr), AiCacheKeys.Verdict(pr with { UpdatedAt = "2026-10-11T00:00:00Z" }));
+        Assert.NotEqual(AiCacheKeys.Verdict(pr), AiCacheKeys.Verdict(pr with { Links = [new("sticky:goal", "Release", "required")] }));
+        var pair = new PairContext(pr.Ref, "pr:example/repo#2", pr, Context("pr:example/repo#2"), null);
+        Assert.Equal(AiCacheKeys.Pair(pair), AiCacheKeys.Pair(pair with { A = pr with { Facts = pr.Facts with { IdleDays = 99 } } }));
+    }
+    [Fact]
     public void LargePairSetsSplitByPayloadSizeWithoutDroppingPairs()
     {
         var pairs = Enumerable.Range(1, 45).Select(i => new PairContext(

@@ -24,13 +24,14 @@ public sealed class AiStore(Database database, SyncStore sync, AuthoringStore au
             var linked = strings.Where(l => l.Status == "tied" && (l.ARef == $"pr:{card.Id}" || l.BRef == $"pr:{card.Id}"))
                 .Select(l => (Link: l, Other: l.ARef == $"pr:{card.Id}" ? l.BRef : l.ARef))
                 .Where(l => allowedRefs.Contains(l.Other) || l.Other.StartsWith("sticky:"))
-                .Take(20).Select(l => new LinkedContext(l.Other,
+                .Where(l => l.Link.Source != "ai" || l.Link.Label is not null)
+                .OrderBy(l => l.Other, StringComparer.Ordinal).Take(20).Select(l => new LinkedContext(l.Other,
                     cards.FirstOrDefault(c => $"pr:{c.Id}" == l.Other)?.Title ??
                     own.Stickies.FirstOrDefault(s => $"sticky:{s.Id}" == l.Other)?.Title ?? "",
                     l.Link.Label is null ? null : Limit(l.Link.Label, 1000))).Where(l => l.Title.Length > 0).ToArray();
             contexts.Add(new($"pr:{card.Id}", card.RepoId, card.Title, Limit(context.Body, 4000), card.Author, card.CreatedAt,
                 paths.ToArray(), new(facts.Turn, facts.TurnReason, facts.AgeDays, facts.IdleDays, facts.BehindBy, facts.Conflicting, facts.Size, facts.Origin),
-                context.Threads.Take(5).Select(t => Limit(t.Excerpt ?? "", 300)).ToArray(), linked));
+                context.Threads.Take(5).Select(t => Limit(t.Excerpt ?? "", 300)).ToArray(), linked) { UpdatedAt = card.UpdatedAt });
         }
         var budget = await db.QuerySingleAsync<string>(new CommandDefinition("SELECT value FROM app_setting WHERE key='ai_budget'", cancellationToken: ct));
         return new(contexts, own.Stickies.Select(s => new AiSticky($"sticky:{s.Id}", s.Title)).ToArray(),
@@ -43,10 +44,15 @@ public sealed class AiStore(Database database, SyncStore sync, AuthoringStore au
         return await db.ExecuteScalarAsync<int>(new CommandDefinition("SELECT COUNT(*) FROM ai_cache WHERE input_hash=@hash", new { hash }, cancellationToken: ct)) > 0;
     }
     public async Task<AiReservation?> ReserveAsync(string hash, string decider, decimal maximumCost, CancellationToken ct,
-        string? job = null, IReadOnlyList<string>? targets = null)
+        string? job = null, IReadOnlyList<string>? targets = null, IReadOnlyList<AiWork>? work = null)
     {
         await using var db = await database.OpenAsync(ct);
         using var tx = db.BeginTransaction(deferred: false);
+        foreach (var item in work ?? [])
+            if (await db.ExecuteScalarAsync<int>(new CommandDefinition(
+                "SELECT COUNT(*) FROM ai_look WHERE job=@Job AND target=@Target AND state_hash=@StateHash",
+                item, tx, cancellationToken: ct)) > 0)
+                throw new InvalidOperationException("This AI work has already been attempted for the current PR state.");
         var budget = decimal.Parse(await db.QuerySingleAsync<string>(new CommandDefinition(
             "SELECT value FROM app_setting WHERE key='ai_budget'", transaction: tx, cancellationToken: ct)), System.Globalization.CultureInfo.InvariantCulture);
         var month = clock.GetUtcNow().ToString("yyyy-MM");
@@ -61,9 +67,50 @@ public sealed class AiStore(Database database, SyncStore sync, AuthoringStore au
             VALUES(@id,@decider,@hash,0,0,0,0,@at,'reserved',@maximumCost,@job,@targets)
             """, new { id, decider, hash, at = clock.GetUtcNow().ToString("O"), maximumCost, job,
                 targets = targets is null ? null : JsonSerializer.Serialize(targets) }, tx, cancellationToken: ct));
+        foreach (var item in work ?? [])
+            await db.ExecuteAsync(new CommandDefinition(
+                "INSERT INTO ai_look(job,target,state_hash,call_id) VALUES(@Job,@Target,@StateHash,@id)",
+                new { item.Job, item.Target, item.StateHash, id }, tx, cancellationToken: ct));
         tx.Commit();
         return new(id, hash);
     }
+    public async Task<bool> LookedAsync(AiWork work, IReadOnlyList<PrContext> prs, CancellationToken ct)
+    {
+        await using var db = await database.OpenAsync(ct);
+        if (await db.ExecuteScalarAsync<int>(new CommandDefinition(
+            "SELECT COUNT(*) FROM ai_look WHERE job=@Job AND target=@Target AND state_hash=@StateHash", work, cancellationToken: ct)) > 0)
+            return true;
+        // Adopt identifiable successful legacy calls only when their PR and authored context have not changed since.
+        var targets = work.Target.Split('\n');
+        if (targets.Any(t => !t.StartsWith("pr:"))) return false;
+        var inputs = targets.Select(t => prs.FirstOrDefault(p => p.Ref == t)).ToArray();
+        if (inputs.Any(p => p is null || p.UpdatedAt.Length == 0)) return false;
+        var calls = await db.QueryAsync<LegacyCall>(new CommandDefinition("""
+            SELECT id AS Id,pr_id AS PrId,targets AS Targets,created_at AS CreatedAt
+            FROM ai_call WHERE status='completed' AND (job=@Job OR (@Job='verdict' AND pr_id IS NOT NULL))
+              AND NOT EXISTS(SELECT 1 FROM ai_look WHERE call_id=ai_call.id AND job=@Job AND target=@Target)
+            ORDER BY created_at DESC
+            """, work, cancellationToken: ct));
+        foreach (var call in calls)
+        {
+            var covered = work.Job == "verdict" ? call.PrId == targets[0][3..] :
+                call.Targets is not null && (JsonSerializer.Deserialize<string[]>(call.Targets) ?? []).Any(t =>
+                    string.Join("\n", t.Split(" ↔ ").Order(StringComparer.Ordinal)) == work.Target);
+            if (!covered || inputs.Any(p => FactsEngine.At(p!.UpdatedAt) > FactsEngine.At(call.CreatedAt))) continue;
+            if (inputs.Any(p => p!.Links.Any(l => l.Ref.StartsWith("sticky:")))) continue;
+            var changes = await db.QueryAsync<string>(new CommandDefinition("""
+                SELECT decided_at FROM link WHERE decided_at IS NOT NULL AND (a_ref IN @targets OR b_ref IN @targets)
+                """, new { targets }, cancellationToken: ct));
+            if (changes.Any(at => FactsEngine.At(at) > FactsEngine.At(call.CreatedAt))) continue;
+            await db.ExecuteAsync(new CommandDefinition("""
+                INSERT INTO ai_look(job,target,state_hash,call_id) VALUES(@Job,@Target,@StateHash,@id)
+                ON CONFLICT(job,target,state_hash) DO NOTHING
+                """, new { work.Job, work.Target, work.StateHash, id = call.Id }, cancellationToken: ct));
+            return true;
+        }
+        return false;
+    }
+    private sealed record LegacyCall(string Id, string? PrId, string? Targets, string CreatedAt);
     public async Task FinishAsync(AiReservation reservation, AiUsage usage, PrContext? pr, PrJudgment? verdict,
         IReadOnlyList<LinkJudgment>? links, CancellationToken ct)
     {
@@ -117,6 +164,8 @@ public sealed class AiStore(Database database, SyncStore sync, AuthoringStore au
         if (usage is not null) await Complete(db, tx, reservation, usage, "failed", error, ct);
         else await db.ExecuteAsync(new CommandDefinition("UPDATE ai_call SET error=@error WHERE id=@id",
             new { id = reservation.Id, error }, tx, cancellationToken: ct));
+        if (usage is { InputTokens: 0, OutputTokens: 0, Cost: 0 })
+            await db.ExecuteAsync(new CommandDefinition("DELETE FROM ai_look WHERE call_id=@id", new { id = reservation.Id }, tx, cancellationToken: ct));
         tx.Commit();
     }
     private static Task Complete(Microsoft.Data.Sqlite.SqliteConnection db, Microsoft.Data.Sqlite.SqliteTransaction tx,
