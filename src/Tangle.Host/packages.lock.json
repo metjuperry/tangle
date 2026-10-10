@@ -2,6 +2,14 @@
   "version": 1,
   "dependencies": {
     "net10.0": {
+      "Anthropic": {
+        "type": "Transitive",
+        "resolved": "12.55.0",
+        "contentHash": "Gpf6no4CBXnB2RwP1BItFgwXQcsGNX4rKcgYEdoMOVgnCIZ8xODdueEJrklCEFUh5CPld7xGmfDKZz5y0U59uQ==",
+        "dependencies": {
+          "Microsoft.Extensions.AI.Abstractions": "10.5.1"
+        }
+      },
       "Dapper": {
         "type": "Transitive",
         "resolved": "2.1.66",
@@ -24,6 +32,11 @@
         "dependencies": {
           "SQLitePCLRaw.core": "2.1.11"
         }
+      },
+      "Microsoft.Extensions.AI.Abstractions": {
+        "type": "Transitive",
+        "resolved": "10.5.1",
+        "contentHash": "nB0l3IlsVbNeUxsE7nZNb9GY8rP1OSeqpj0pseORPejt474HNKEauTWTLdSJPkSvPlRMxowZNMo6nyp7APAiSg=="
       },
       "Microsoft.Extensions.FileProviders.Embedded": {
         "type": "Transitive",
@@ -60,6 +73,7 @@
       "tangle.ai": {
         "type": "Project",
         "dependencies": {
+          "Anthropic": "[12.55.0, )",
           "Tangle.Core": "[1.0.0, )"
         }
       },

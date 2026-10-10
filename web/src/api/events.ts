@@ -19,6 +19,13 @@ export function useLiveEvents() {
       setStatus(data.success ? 'Board up to date.' : 'Sync failed. Cached board retained.')
       invalidate()
     })
+    events.addEventListener('ai.budget', () => { setStatus('Monthly AI budget reached. No further provider calls.'); void client.invalidateQueries({ queryKey: ['ai'] }) })
+    events.addEventListener('ai.error', event => {
+      const data: { error: string } = JSON.parse((event as MessageEvent<string>).data)
+      setStatus(`AI suggestions failed: ${data.error}`)
+      void client.invalidateQueries({ queryKey: ['ai'] })
+    })
+    events.addEventListener('verdict.ready', () => { void client.invalidateQueries({ queryKey: ['ai'] }) })
     events.onerror = () => setStatus('Live connection interrupted; reconnecting…')
     events.onopen = () => setStatus('')
     return () => events.close()

@@ -36,7 +36,11 @@ export function SidePanel({ board }: { board: Board }) {
       <Notes key={card.id} board={board} targetRef={`pr:${card.id}`} />
       <div className="fact-block"><p className="eyebrow">Whose turn</p><strong>{card.facts?.turnReason}</strong>
         <p>{card.facts?.size} · {card.facts?.idleDays} idle days · {card.facts?.conflicting ? 'conflicts' : 'no known conflicts'}</p>
-        <p className="quiet">AI suggestions are off. Nothing will be posted to GitHub.</p></div>
+        <p className="quiet">Nothing will be posted to GitHub.</p></div>
+      {card.verdict && <div className="fact-block"><p className="eyebrow">Suggested next step · {Math.round(card.verdict.confidence * 100)}% confidence</p>
+        <strong>{card.verdict.action}</strong><p>{card.verdict.reason}</p><p className="quiet">AI proposal, not an action.</p>
+        {card.verdict.createdAt && <p className="quiet">Generated {new Date(card.verdict.createdAt).toLocaleString()}; check against current facts.</p>}</div>}
+      {card.verdict?.intent && <><h3>Why it exists</h3><p>{card.verdict.intent}</p></>}
       {context.isPending && <p role="status">Loading the card back…</p>}
       {context.error && <p role="alert">{context.error.message}</p>}
       {context.data && <>

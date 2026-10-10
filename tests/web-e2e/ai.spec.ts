@@ -1,0 +1,38 @@
+import { test, expect } from '../../web/node_modules/@playwright/test'
+
+test('AI verdict and suggested string display as proposals, tie and cut stay human actions', async ({ page }) => {
+  await page.route('**/api/board', async route => {
+    const response = await route.fetch()
+    const board = await response.json()
+    board.cards.find((c: { number: number }) => c.number === 49).verdict = {
+      action: 'fix', confidence: .9, priority: 4, reason: 'Answer four unresolved review asks.', intent: 'Add a metadata checkpoint.',
+    }
+    board.strings = [{ id: 'fixture-ai', aRef: 'pr:example/repo#49', bRef: 'pr:example/tools#195',
+      source: 'ai', status: 'suggested', reason: 'Both add connector metadata.', label: null }]
+    await route.fulfill({ json: board })
+  })
+  await page.route('**/api/links/fixture-ai', route => route.fulfill({ json: { saved: true } }))
+  await page.goto('/')
+  await page.getByLabel('Development key').fill('tangle-browser-test-key-not-a-secret')
+  await page.getByRole('button', { name: 'Unlock Tangle' }).click()
+  await page.getByRole('button', { name: /example\/repo #49,/ }).click()
+  await expect(page.getByText('Answer four unresolved review asks.')).toBeVisible()
+  await expect(page.getByText('AI proposal, not an action.')).toBeVisible()
+  await page.locator('.yarn-tag').click()
+  await expect(page.getByRole('heading', { name: 'Do these belong together?' })).toBeVisible()
+  await expect(page.getByRole('button', { name: 'Tie it', exact: true })).toBeVisible()
+  await expect(page.getByRole('button', { name: 'Cut the string' })).toBeVisible()
+})
+test('repo AI switch and budget are explicit settings while server calls stay disabled', async ({ page }) => {
+  await page.goto('/settings')
+  await page.getByLabel('Development key').fill('tangle-browser-test-key-not-a-secret')
+  await page.getByRole('button', { name: 'Unlock Tangle' }).click()
+  await expect(page.getByText('Provider calls disabled on the server.', { exact: false })).toBeVisible()
+  await page.getByRole('checkbox', { name: 'Allow AI for example/templates', exact: true }).check()
+  await page.getByLabel('Monthly AI budget (USD)').fill('0.50')
+  await page.getByRole('button', { name: 'Save settings' }).click()
+  await expect(page.getByText('Settings saved.', { exact: true })).toBeVisible()
+  await page.reload()
+  await expect(page.getByRole('checkbox', { name: 'Allow AI for example/templates', exact: true })).toBeChecked()
+  await expect(page.getByLabel('Monthly AI budget (USD)')).toHaveValue('0.5')
+})

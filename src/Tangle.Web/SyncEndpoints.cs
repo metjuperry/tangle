@@ -2,6 +2,7 @@ using System.Text.RegularExpressions;
 using Microsoft.AspNetCore.Builder;
 using Microsoft.AspNetCore.Http;
 using Microsoft.Extensions.Logging;
+using Microsoft.Extensions.Configuration;
 using Tangle.Core;
 using Tangle.Data;
 
@@ -27,8 +28,8 @@ public static partial class SyncEndpoints
                 input.Owners.Select(o => o.Id).Distinct(StringComparer.OrdinalIgnoreCase).Count() != input.Owners.Count ||
                 input.Repos.Select(r => r.Id).Distinct(StringComparer.OrdinalIgnoreCase).Count() != input.Repos.Count)
                 return Results.BadRequest(new { error = "Supply unique valid owner names (kind org/user) and owner/repo names." });
-            if (input.Repos.Any(r => r.AiAllowed))
-                return Results.BadRequest(new { error = "AI is unavailable until M5; all repo switches must remain off." });
+            if (input.AiBudget is < 0 or > 100)
+                return Results.BadRequest(new { error = "AI monthly budget must be between $0 and $100." });
             await store.SaveSettingsAsync(input, ct);
             events.Publish("prs.changed", new { ids = Array.Empty<string>() });
             return Results.Ok(await store.GetSettingsAsync(ct));
@@ -67,6 +68,13 @@ public static partial class SyncEndpoints
             context.Response.Headers.CacheControl = "no-cache, no-store";
             context.Response.Headers["X-Accel-Buffering"] = "no";
             return Results.ServerSentEvents(events.Subscribe(value.Length == 0 ? null : long.Parse(value), context.RequestAborted));
+        });
+        api.MapGet("/ai/status", async (Tangle.Data.Database database, Microsoft.Extensions.Configuration.IConfiguration config, CancellationToken ct) =>
+        {
+            await using var db = await database.OpenAsync(ct);
+            var calls = await Dapper.SqlMapper.QueryAsync(db, new Dapper.CommandDefinition(
+                "SELECT decider,input_tokens,output_tokens,cost,latency_ms,status,error,created_at FROM ai_call ORDER BY created_at DESC LIMIT 50", cancellationToken: ct));
+            return Results.Ok(new { enabled = config.GetValue<bool>("Ai:Enabled"), calls });
         });
     }
 }

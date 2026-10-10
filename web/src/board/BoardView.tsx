@@ -103,7 +103,7 @@ function YarnEdge({ sourceX, sourceY, targetX, targetY, data }: EdgeProps<YarnLi
     <EdgeLabelRenderer><button className="yarn-tag nodrag nopan" style={{ background: color, borderColor: color, transform: `translate(-50%, -50%) translate(${mx}px, ${my}px)` }}
       aria-label={`Rule string: ${data.yarn.aRef.slice(3)} and ${data.yarn.bRef.slice(3)}`}
       title="Explain this connection"
-      onClick={() => select(data.yarn.id)}>{data.yarn.source === 'me' ? '✎' : '✓'}</button></EdgeLabelRenderer></>
+      onClick={() => select(data.yarn.id)}>{data.yarn.status === 'suggested' ? '?' : data.yarn.source === 'me' ? '✎' : '✓'}</button></EdgeLabelRenderer></>
 }
 const nodeTypes = { zone: ZoneNode, pr: PrCardNode, batch: PrCardNode, stack: StackNode, sticky: StickyNode }
 const edgeTypes = { yarn: YarnEdge }

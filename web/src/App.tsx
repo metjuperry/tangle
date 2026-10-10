@@ -10,12 +10,13 @@ import { NewSticky } from './card/AuthoringPanel'
 
 type Owner = { id: string; kind: 'org' | 'user'; watched: boolean }
 type Repo = { id: string; watched: boolean; aiAllowed: boolean }
-type Settings = { owners: Owner[]; repos: Repo[]; botLogins: string[] }
+type Settings = { owners: Owner[]; repos: Repo[]; botLogins: string[]; aiBudget: number }
 type SyncResult = { fetched: number; changed: number; calls: number; cost: number }
 const queries = new QueryClient()
 function SettingsPage() {
   const queryClient = useQueryClient()
   const settings = useQuery({ queryKey: ['settings'], queryFn: () => api<Settings>('/api/settings') })
+  const aiStatus = useQuery({ queryKey: ['ai'], queryFn: () => api<{ enabled: boolean; calls: { cost: number; status: string; error: string | null; created_at: string }[] }>('/api/ai/status') })
   const [draft, setDraft] = useState<Settings | null>(null)
   const [owner, setOwner] = useState('')
   const [kind, setKind] = useState<'org' | 'user'>('org')
@@ -29,7 +30,11 @@ function SettingsPage() {
   })
   if (settings.error) return <p role="alert">{settings.error.message}</p>
   if (!value) return <p>Loading settings…</p>
-  return <section className="settings-page"><h1>Settings</h1><p>Tokens belong in user-secrets or your environment, never here. AI remains off until M5.</p>
+  return <section className="settings-page"><h1>Settings</h1><p>Tokens belong in user-secrets or your environment, never here.</p>
+    <h2>AI privacy and budget</h2><p>AI is opt-in per repository. Enabling a switch permits sending its titles, descriptions, changed paths, review excerpts and linked labels to Anthropic. Never diffs or file contents. Check client policy first.</p>
+    <p>{aiStatus.data?.enabled ? 'Provider calls enabled on the server.' : 'Provider calls disabled on the server. Set Ai:Enabled only when ready to authorize paid API usage.'}</p>
+    <label>Monthly AI budget (USD)<input type="number" min="0" max="100" step="0.01" value={value.aiBudget ?? 1}
+      onChange={e => setDraft({ ...value, aiBudget: Number(e.target.value) })} /></label>
     <h2>Watched owners</h2>
     {value.owners.map((o, i) => <label key={o.id}><span><input type="checkbox" checked={o.watched}
       onChange={e => setDraft({ ...value, owners: value.owners.map((item, j) => j === i ? { ...item, watched: e.target.checked } : item) })} /> {o.id} ({o.kind})</span></label>)}
@@ -40,7 +45,9 @@ function SettingsPage() {
     </form>
     <h2>Repositories</h2><p>Watched owners discover their repos during sync. Uncheck a repo to hide it; add a repo to watch it without its entire owner.</p>
     {value.repos.map((r, i) => <label key={r.id}><span><input type="checkbox" checked={r.watched}
-      onChange={e => setDraft({ ...value, repos: value.repos.map((item, j) => j === i ? { ...item, watched: e.target.checked } : item) })} /> {r.id} · AI off</span></label>)}
+      onChange={e => setDraft({ ...value, repos: value.repos.map((item, j) => j === i ? { ...item, watched: e.target.checked } : item) })} /> {r.id}</span>
+      <span><input aria-label={`Allow AI for ${r.id}`} type="checkbox" checked={r.aiAllowed}
+        onChange={e => setDraft({ ...value, repos: value.repos.map((item, j) => j === i ? { ...item, aiAllowed: e.target.checked } : item) })} /> Allow AI for this repo</span></label>)}
     <form onSubmit={e => { e.preventDefault(); setDraft({ ...value, repos: [...value.repos, { id: repo.trim(), watched: true, aiAllowed: false }] }); setRepo('') }}>
       <label>Repository (owner/repo)<input value={repo} onChange={e => setRepo(e.target.value)} required /></label><button>Add repository</button>
     </form>
@@ -48,6 +55,8 @@ function SettingsPage() {
     <label>Bot logins (comma-separated)<input value={value.botLogins.join(', ')}
       onChange={e => setDraft({ ...value, botLogins: e.target.value.split(',').map(s => s.trim()).filter(Boolean) })} /></label>
     {save.error && <p role="alert">{save.error.message}</p>}{save.isSuccess && <p role="status">Settings saved.</p>}
+    <h3>Recent AI calls</h3>{aiStatus.error && <p role="alert">{aiStatus.error.message}</p>}
+    {aiStatus.data?.calls.map((call, i) => <p key={i}>{call.status} · ${call.cost.toFixed(6)} · {call.error ?? call.created_at}</p>)}
   </section>
 }
 function Workspace() {

@@ -11,6 +11,7 @@ public sealed record RepoSetting(string Id, bool Watched = true, bool AiAllowed 
 public sealed record WatchedSettings(IReadOnlyList<OwnerSetting> Owners, IReadOnlyList<RepoSetting> Repos)
 {
     public IReadOnlyList<string> BotLogins { get; init; } = ["dependabot", "dependabot[bot]", "github-actions", "github-actions[bot]"];
+    public decimal AiBudget { get; init; } = 1m;
 }
 public sealed record PrEvent(string At, string? Actor, string Kind, string Detail)
 {
@@ -54,7 +55,7 @@ public interface ISyncStore
 }
 public sealed record SyncResult(int Fetched, int Changed, int Calls, int Cost);
 
-public sealed class SyncService(IGitHubReader github, ISyncStore store, TimeProvider clock, ILiveEvents? events = null)
+public sealed class SyncService(IGitHubReader github, ISyncStore store, TimeProvider clock, ILiveEvents? events = null, IAiQueue? ai = null)
 {
     private readonly SemaphoreSlim gate = new(1, 1);
     public async Task<SyncResult> RunAsync(CancellationToken ct)
@@ -105,6 +106,7 @@ public sealed class SyncService(IGitHubReader github, ISyncStore store, TimeProv
                 events?.Publish("prs.changed", new { ids = prs.Keys.ToArray() });
             }
             events?.Publish("sync.finished", new { fetched, changed, calls, cost, success = true });
+            ai?.Enqueue();
             return new(fetched, changed, calls, cost);
         }
         catch (Exception)
