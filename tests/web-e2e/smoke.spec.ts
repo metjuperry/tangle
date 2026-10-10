@@ -79,14 +79,17 @@ test('sync events invalidate board and open card context', async ({ page }) => {
 })
 test('opening stale board syncs once while fresh board does not', async ({ page }) => {
   let syncs = 0
+  await unlock(page, '/settings')
+  await expect(page.getByRole('heading', { name: 'Settings', exact: true })).toBeVisible()
+  const response = await page.request.get('/api/board')
+  expect(response.ok()).toBeTruthy()
+  const board = await response.json()
+  board.lastSyncAt = '2026-01-01T00:00:00Z'
   await page.route('**/api/board', async route => {
-    const response = await route.fetch()
-    const board = await response.json()
-    board.lastSyncAt = '2026-01-01T00:00:00Z'
     await route.fulfill({ json: board })
-  })
+  }, { times: 1 })
   page.on('request', request => { if (request.url().endsWith('/api/sync')) syncs++ })
-  await unlock(page)
+  await page.goto('/')
   await expect.poll(() => syncs).toBe(1)
   await expect(page.locator('[data-testid="card-example/repo#49"]')).toContainText('Updated from fixture sync')
   await page.unrouteAll({ behavior: 'wait' })
