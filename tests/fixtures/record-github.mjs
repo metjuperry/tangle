@@ -21,6 +21,7 @@ function scrub(node) {
   for (const [key, value] of Object.entries(node)) {
     if (typeof value !== 'string') result[key] = scrub(value)
     else if (key === 'login') result[key] = login(value)
+    else if (key === 'name') result[key] = 'Example commit author'
     else if (key === 'nameWithOwner') result[key] = 'example/repo'
     else if (['body', 'bodyText', 'message'].includes(key)) result[key] = 'Scrubbed public fixture text.'
     else if (key === 'title') result[key] = 'Example pull request'

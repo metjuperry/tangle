@@ -88,7 +88,7 @@ public sealed class HostTests(TangleFactory factory) : IClassFixture<TangleFacto
             repos = new[] { new { id = "example/repo", watched = true, aiAllowed = false } } };
         Assert.Equal(HttpStatusCode.OK, (await client.PutAsJsonAsync("/api/settings", good)).StatusCode);
         Assert.Contains("example/repo", await client.GetStringAsync("/api/settings"));
-        Assert.Equal(HttpStatusCode.BadRequest, (await client.PutAsJsonAsync("/api/settings", new
+        Assert.Equal(HttpStatusCode.OK, (await client.PutAsJsonAsync("/api/settings", new
         {
             owners = Array.Empty<object>(), repos = new[] { new { id = "example/repo", watched = true, aiAllowed = true } }
         })).StatusCode);

@@ -119,7 +119,7 @@ public sealed class GitHubReader(HttpClient http, GitHubTokens tokens, ILogger<G
                       ... on IssueComment { createdAt author { login } body }
                       ... on PullRequestReview { createdAt submittedAt author { login } body state }
                       ... on ReviewRequestedEvent { createdAt actor { login } requestedReviewer { __typename ... on User { login } ... on Team { slug } } }
-                      ... on PullRequestCommit { commit { committedDate message author { user { login } } } }
+                      ... on PullRequestCommit { commit { committedDate message author { name user { login } } } }
                     }
                     """
             };

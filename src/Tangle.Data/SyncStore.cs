@@ -17,7 +17,9 @@ public sealed partial class SyncStore(Database database, TimeProvider? clock = n
             "SELECT value FROM app_setting WHERE key='bot_logins'", cancellationToken: ct));
         return new(owners.ToArray(), repos.ToArray())
         {
-            BotLogins = JsonSerializer.Deserialize<string[]>(bots) ?? throw new InvalidOperationException("Bot logins setting is invalid.")
+            BotLogins = JsonSerializer.Deserialize<string[]>(bots) ?? throw new InvalidOperationException("Bot logins setting is invalid."),
+            AiBudget = decimal.Parse(await db.QuerySingleAsync<string>(new CommandDefinition("SELECT value FROM app_setting WHERE key='ai_budget'", cancellationToken: ct)),
+                System.Globalization.CultureInfo.InvariantCulture)
         };
     }
 
@@ -36,10 +38,12 @@ public sealed partial class SyncStore(Database database, TimeProvider? clock = n
                 owner, tx, cancellationToken: ct));
         foreach (var repo in settings.Repos)
             await db.ExecuteAsync(new CommandDefinition(
-                "INSERT INTO repo(id,watched,ai_allowed) VALUES (@Id,@Watched,0) ON CONFLICT(id) DO UPDATE SET watched=excluded.watched",
+                "INSERT INTO repo(id,watched,ai_allowed) VALUES (@Id,@Watched,@AiAllowed) ON CONFLICT(id) DO UPDATE SET watched=excluded.watched,ai_allowed=excluded.ai_allowed",
                 repo, tx, cancellationToken: ct));
         await db.ExecuteAsync(new CommandDefinition("UPDATE app_setting SET value=@value WHERE key='bot_logins'",
             new { value = JsonSerializer.Serialize(settings.BotLogins) }, tx, cancellationToken: ct));
+        await db.ExecuteAsync(new CommandDefinition("UPDATE app_setting SET value=@value WHERE key='ai_budget'",
+            new { value = settings.AiBudget.ToString(System.Globalization.CultureInfo.InvariantCulture) }, tx, cancellationToken: ct));
         if (changed)
             await db.ExecuteAsync(new CommandDefinition("DELETE FROM sync_state", transaction: tx, cancellationToken: ct));
         await ComputeCacheAsync(db, tx, ct);
@@ -125,7 +129,11 @@ public sealed partial class SyncStore(Database database, TimeProvider? clock = n
             """, new { includeClosed }, cancellationToken: ct));
         var facts = (await db.QueryAsync<PrFacts>(new CommandDefinition(FactSelect, cancellationToken: ct)))
             .ToDictionary(f => f.PrId);
-        return rows.Select(r => r with { Facts = facts.GetValueOrDefault(r.Id) }).ToArray();
+        var verdicts = (await db.QueryAsync<StoredVerdict>(new CommandDefinition("""
+            SELECT pr_id AS PrId,action AS Action,confidence AS Confidence,priority AS Priority,reason AS Reason,intent AS Intent,created_at AS CreatedAt
+            FROM verdict ORDER BY created_at DESC
+            """, cancellationToken: ct))).GroupBy(v => v.PrId).ToDictionary(g => g.Key, g => g.First());
+        return rows.Select(r => r with { Facts = facts.GetValueOrDefault(r.Id), Verdict = verdicts.GetValueOrDefault(r.Id) }).ToArray();
     }
 }
 
@@ -137,4 +145,5 @@ public sealed record BoardCard(string Id, string RepoId, long Number, string Tit
     public string? BatchId { get; init; }
     public string HeadRef { get; init; } = "";
     public string BaseRef { get; init; } = "";
+    public StoredVerdict? Verdict { get; init; }
 }

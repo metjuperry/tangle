@@ -32,6 +32,20 @@ public sealed class GitHubReaderTests
     }
 
     [Fact]
+    public async Task UnlinkedCommitDisplaysNameWithoutInventingGitHubActor()
+    {
+        var fixture = JsonNode.Parse(Fixture)!;
+        var commit = fixture["data"]!["search"]!["nodes"]![0]!["timelineItems"]!["nodes"]!.AsArray()
+            .First(n => n?["__typename"]?.GetValue<string>() == "PullRequestCommit")!["commit"]!;
+        commit["author"] = JsonNode.Parse("""{"name":"Example Author","user":null}""");
+        var page = await Reader(new Handler(fixture.ToJsonString())).SearchAsync("example", "is:pr", null, "viewer", default);
+        var activity = page.Prs.Single().Events.First(e => e.Kind == "commit");
+        Assert.Null(activity.Actor);
+        Assert.Equal("Example Author (unlinked commit author)", activity.ActorDisplay);
+        Assert.Equal("viewer", (activity with { Actor = "viewer" }).ActorDisplay);
+    }
+
+    [Fact]
     public async Task GraphQlErrorsNeverBecomeSuccessOrPartialData()
     {
         var reader = Reader(new Handler("""{"errors":[{"message":"Access denied"}],"data":null}"""));

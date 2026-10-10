@@ -22,4 +22,7 @@
     <ProjectReference Include="..\..\src\Tangle.Ai\Tangle.Ai.csproj" />
   </ItemGroup>
 
+  <ItemGroup>
+    <ProjectReference Include="../../src/Tangle.Data/Tangle.Data.csproj" />
+  </ItemGroup>
 </Project>

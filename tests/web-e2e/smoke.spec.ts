@@ -25,9 +25,15 @@ test('fixture board renders cards, zones, batch and sagging strings', async ({ p
   await unlock(page)
   await expect(page.getByRole('region', { name: 'Yarn board' })).toBeVisible()
   await expect(page.locator('.repo-zone')).toHaveCount(4)
+  const zones = await page.locator('.react-flow__node-zone').evaluateAll(elements => elements.map(el => {
+    const transform = new DOMMatrix(getComputedStyle(el).transform)
+    return { x: transform.m41, y: transform.m42, width: el.getBoundingClientRect().width / transform.a }
+  }))
+  expect(new Set(zones.map(zone => zone.y)).size).toBe(1)
+  expect(zones.every((zone, i) => i === 0 || zone.x > zones[i - 1].x)).toBeTruthy()
   await expect(page.locator('.batch-card')).toHaveCount(1)
   await expect(page.locator('.batch-card')).toContainText('33 scaffold applier PRs')
-  await expect(page.locator('.yarn-tag')).toHaveCount(1)
+  await expect(page.getByRole('button', { name: 'Rule string: example/repo#49 and example/tools#195', exact: true })).toBeVisible()
   await expect(page.locator('.pr-card.aged').first()).toBeVisible()
   await expect(page.getByRole('link', { name: 'Debug PRs' })).toHaveCount(0)
 })
@@ -40,6 +46,17 @@ test('card opens recorded review asks and links without editing', async ({ page 
   await expect(page.getByRole('complementary', { name: 'Card details' }).getByRole('button', { name: /example\/tools#195/ })).toBeVisible()
   await expect(page.getByRole('button', { name: 'Queue it' })).toHaveCount(0)
   await page.screenshot({ path: testInfo.outputPath('board-card-back.png'), fullPage: true })
+})
+test('recent activity explains an unlinked commit author', async ({ page }) => {
+  await page.route('**/api/prs/example/repo/49', async route => {
+    const response = await route.fetch()
+    const context = await response.json()
+    context.events = [{ at: '2026-10-01T00:00:00Z', actor: null, actorDisplay: 'Example Author (unlinked commit author)', kind: 'commit' }]
+    await route.fulfill({ json: context })
+  })
+  await unlock(page)
+  await page.getByRole('button', { name: /example\/repo #49,/ }).click()
+  await expect(page.locator('.activity')).toContainText('Example Author (unlinked commit author)')
 })
 test('red string tag opens connection explanation by pointer and keyboard', async ({ page }) => {
   await unlock(page)

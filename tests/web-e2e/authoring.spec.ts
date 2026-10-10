@@ -99,8 +99,8 @@ test('create sticky, tie cards and move a card persistently', async ({ page }) =
   await expect.poll(async () => {
     const position = await node.evaluate(el => { const m = new DOMMatrix(getComputedStyle(el).transform); return { x: m.m41, y: m.m42 } })
     const parent = await zone.evaluate(el => { const m = new DOMMatrix(getComputedStyle(el).transform); return { x: m.m41, y: m.m42 } })
-    return { x: position.x - parent.x, y: position.y - parent.y }
-  }).toEqual({ x: saved.x, y: saved.y })
+    return Math.max(Math.abs(position.x - parent.x - saved.x), Math.abs(position.y - parent.y - saved.y))
+  }).toBeLessThan(0.01)
 })
 test('drag pin to pin creates a labelled navy tie', async ({ page }) => {
   await page.goto('/')

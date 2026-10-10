@@ -36,7 +36,11 @@ export function SidePanel({ board }: { board: Board }) {
       <Notes key={card.id} board={board} targetRef={`pr:${card.id}`} />
       <div className="fact-block"><p className="eyebrow">Whose turn</p><strong>{card.facts?.turnReason}</strong>
         <p>{card.facts?.size} · {card.facts?.idleDays} idle days · {card.facts?.conflicting ? 'conflicts' : 'no known conflicts'}</p>
-        <p className="quiet">AI suggestions are off. Nothing will be posted to GitHub.</p></div>
+        <p className="quiet">Nothing will be posted to GitHub.</p></div>
+      {card.verdict && <div className="fact-block"><p className="eyebrow">Suggested next step · {Math.round(card.verdict.confidence * 100)}% confidence</p>
+        <strong>{card.verdict.action}</strong><p>{card.verdict.reason}</p><p className="quiet">AI proposal, not an action.</p>
+        {card.verdict.createdAt && <p className="quiet">Generated {new Date(card.verdict.createdAt).toLocaleString()}; check against current facts.</p>}</div>}
+      {card.verdict?.intent && <><h3>Why it exists</h3><p>{card.verdict.intent}</p></>}
       {context.isPending && <p role="status">Loading the card back…</p>}
       {context.error && <p role="alert">{context.error.message}</p>}
       {context.data && <>
@@ -47,7 +51,7 @@ export function SidePanel({ board }: { board: Board }) {
         {context.data.strings.map(s => { const ref = s.aRef === `pr:${card.id}` ? s.bRef : s.aRef
           return <button className="related-card" key={s.id} onClick={() => select(ref.startsWith('sticky:') ? ref : ref.slice(3))}><b>{ref.replace(/^pr:/, '')}</b><span>{s.label ?? s.reason}</span></button> })}
         {card.batchId && <><h3>In this batch</h3>{board.cards.filter(p => p.batchId === card.batchId).map(p => <button className="related-card" key={p.id} onClick={() => select(p.id)}>{p.id} · {p.title}</button>)}</>}
-        <h3>Recent activity</h3>{context.data.events.slice(0, 8).map((e, i) => <p className="activity" key={i}>{e.actor ?? 'unknown'} · {e.kind} · {new Date(e.at).toLocaleDateString()}</p>)}
+        <h3>Recent activity</h3>{context.data.events.slice(0, 8).map((e, i) => <p className="activity" key={i}>{e.actorDisplay ?? e.actor ?? 'Author unavailable'} · {e.kind} · {new Date(e.at).toLocaleDateString()}</p>)}
       </>}
     </> : <div className="panel-empty"><span className="empty-pin">●</span><h2>Follow a string.</h2><p>Pick a pinned card to read its story, open review asks and related pull requests.</p><p className="quiet">Your turn first. The dustiest next.</p></div>}
     {(board.cutStrings?.length ?? 0) > 0 && <><h3>Cut strings</h3>{board.cutStrings?.map(s =>
