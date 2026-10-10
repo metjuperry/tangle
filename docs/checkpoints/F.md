@@ -52,9 +52,11 @@ Offline API tests prove explicit confirmation, disabled Apply, exactly-once clai
 
 ## Decisions/deviations
 
+Fix offers **Still my turn**, which acknowledges the review work and moves on without changing computed facts or creating a GitHub action. There is no to-do list. **Draft a comment instead** is a separate option. Like Wait/Snooze, the local decision persists and Undo brings its card back.
+
 Board/Untangle navigation now stays in the app. A paper-and-yarn loading overlay keeps the previous view visible while the lazy deck and required data load, with a static reduced-motion version and explicit errors. Cached switches have no artificial delay; browser back/forward is supported.
 
-- Fix, Ping and Split intent cannot safely become GitHub mutations automatically; the exact action editor makes the actual operation explicit. No generated comment is posted without review.
+- Fix can record a local “Still my turn” decision; Ping and any explicitly drafted comment still require the exact action editor. No generated comment is posted without review.
 - Wait/Snooze persist local decisions but do not enqueue GitHub actions. Snooze leaves the current deck until undo; a time-based snooze/revisit rule is unspecified and not invented.
 - Close posts no comment; queue a separate comment to explain it. Closing another person's PR is blocked.
 - Merge uses MERGE strategy and automatically captures the current head from a read-only GitHub request when queued; nobody types a SHA. Apply rechecks and pins that version so new commits block the merge. The confirmation shows version details only on demand. Decide whether merge should stay disabled and whether to offer other methods later.

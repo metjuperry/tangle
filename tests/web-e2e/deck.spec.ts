@@ -1,5 +1,33 @@
 import { test, expect } from '../../web/node_modules/@playwright/test'
 
+test('Fix acknowledges still my turn without a to-do or GitHub action', async ({ page }) => {
+  let queued = 0
+  page.on('request', request => { if (request.method() === 'POST' && request.url().endsWith('/api/actions')) queued++ })
+  await page.goto('/untangle')
+  await page.getByLabel('Development key').fill('tangle-browser-test-key-not-a-secret')
+  await page.getByRole('button', { name: 'Unlock Tangle' }).click()
+  await expect(page.getByRole('button', { name: 'Fix F', exact: true })).toBeEnabled()
+  await page.keyboard.press('f')
+  await expect(page.getByRole('heading', { name: 'Fix', exact: true })).toBeVisible()
+  await expect(page.getByRole('button', { name: 'Still my turn' })).toBeFocused()
+  const initial = await (await page.request.get('/api/decisions')).json()
+  const board = await (await page.request.get('/api/board')).json()
+  const cardId = await page.locator('.deck-ref').textContent()
+  const originalTurn = board.cards.find((c: { id: string }) => c.id === cardId).facts.turn
+  await page.getByRole('button', { name: 'Still my turn' }).click()
+  await expect(page.getByRole('dialog')).toHaveCount(0)
+  await expect.poll(async () => (await (await page.request.get('/api/decisions')).json()).length).toBe(initial.length + 1)
+  const decisions = await (await page.request.get('/api/decisions')).json()
+  expect(decisions.at(-1)).toMatchObject({ prId: cardId, choice: 'fix', actionId: null })
+  expect(queued).toBe(0)
+  await page.reload()
+  await expect(page.getByRole('region', { name: 'My to-do' })).toHaveCount(0)
+  await expect(page.locator('.deck-ref')).not.toHaveText(cardId!)
+  const after = await (await page.request.get('/api/board')).json()
+  expect(after.cards.find((c: { id: string }) => c.id === cardId).facts.turn).toBe(originalTurn)
+  await page.getByRole('button', { name: 'Undo last decision · U' }).click()
+  await expect(page.locator('.deck-ref')).toHaveText(cardId!)
+})
 test('merge captures the PR version automatically without asking for a SHA', async ({ page }) => {
   let queuedPayload: { kind: string; payload: object } | undefined
   await page.route('**/api/actions', async route => {
@@ -71,6 +99,7 @@ test('Untangle keys, queue, exact confirmation, undo and full deck', async ({ pa
   await page.getByRole('button', { name: 'Unlock Tangle' }).click()
   await expect(page.getByRole('region', { name: 'Untangle deck' })).toBeVisible()
   await page.keyboard.press('f')
+  await page.getByRole('button', { name: 'Draft a comment instead' }).click()
   await page.getByLabel('Comment text').fill('Exact sandbox comment')
   await page.getByRole('button', { name: 'Queue action', exact: true }).click()
   await expect(page.getByRole('complementary', { name: 'Queued actions' })).toContainText('Exact sandbox comment')

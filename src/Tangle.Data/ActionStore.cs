@@ -66,7 +66,10 @@ public sealed class ActionStore(Database database, TimeProvider clock)
             "SELECT COUNT(*) FROM action WHERE id=@actionId AND pr_id=@prId AND status='queued'", new { actionId, prId }, tx, cancellationToken: ct)) != 1)
             throw new ArgumentException("Queued action does not match this PR.");
         var decision = new DeckDecision(Guid.NewGuid().ToString(), prId, choice, actionId, clock.GetUtcNow().ToString("O"));
-        await db.ExecuteAsync(new CommandDefinition("INSERT INTO decision VALUES(@Id,@PrId,@Choice,@ActionId,@CreatedAt)", decision, tx, cancellationToken: ct));
+        await db.ExecuteAsync(new CommandDefinition("""
+            INSERT INTO decision(id,pr_id,choice,action_id,created_at)
+            VALUES(@Id,@PrId,@Choice,@ActionId,@CreatedAt)
+            """, decision, tx, cancellationToken: ct));
         tx.Commit(); return decision;
     }
     public async Task UndoAsync(CancellationToken ct)

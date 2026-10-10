@@ -37,6 +37,12 @@ public sealed class ActionTests
         await store.DecideAsync(action.PrId, "fix", action.Id, default);
         await store.UndoAsync(default);
         Assert.Equal("dismissed", (await store.GetAsync(action.Id, default))!.Status);
+        var localFix = await store.DecideAsync("fixture/sandbox#1", "fix", null, default);
+        Assert.Equal("fix", localFix.Choice);
+        Assert.Null(localFix.ActionId);
+        await store.UndoAsync(default);
+        Assert.Empty(await store.DecisionsAsync(default));
+        Assert.Equal(0, github.Applied);
         action = await store.QueueAsync("fixture/sandbox#1", "comment", System.Text.Json.JsonSerializer.Serialize(new ActionPayload("Exact text")), default);
         Assert.Equal(HttpStatusCode.BadRequest, (await client.PostAsJsonAsync($"/api/actions/{action.Id}/apply", new { confirmed = false })).StatusCode);
         Assert.Equal(0, github.Applied);
