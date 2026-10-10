@@ -2,12 +2,10 @@ import { useEffect, useRef, useState } from 'react'
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 import { api, write } from '../api/client'
 import { actionResultLabel, actionResultUrl } from './actionResult'
-import type { Decision } from './Untangle'
 import { useReducedMotion } from 'motion/react'
 
 export type Action = { id: string; prId: string; kind: string; payload: string; status: string; result: string | null }
-type SavedRound = { id: string; createdAt: string; actions: Action[]; decisions: Decision[] }
-function ActionResult({ action }: { action: Action }) {
+export function ActionResult({ action }: { action: Action }) {
   return <div className={`receipt-item receipt-result ${action.status === 'failed' ? 'receipt-failed' : ''}`}>
     <b>{actionResultLabel(action.kind, action.status)}</b><span>{action.prId}</span>
     {action.status === 'failed' && <p>{action.result ?? 'No result recorded. Check GitHub before retrying.'}</p>}
@@ -86,8 +84,6 @@ export function Receipt() {
   const actions = useQuery({ queryKey: ['actions'], queryFn: () => api<Action[]>('/api/actions') })
   const policy = useQuery({ queryKey: ['apply-policy'], queryFn: () => api<{ enabled: boolean; sandboxRepo: string | null }>('/api/actions/policy') })
   const [confirm, setConfirm] = useState<Action | null>(null)
-  const decisions = useQuery({ queryKey: ['decisions'], queryFn: () => api<Decision[]>('/api/decisions') })
-  const history = useQuery({ queryKey: ['receipt-history'], queryFn: () => api<SavedRound[]>('/api/receipts/history') })
   const [tearConfirm, setTearConfirm] = useState(false)
   const [tearing, setTearing] = useState(false)
   const reducedMotion = useReducedMotion()
@@ -104,6 +100,10 @@ export function Receipt() {
   return <><aside className={`receipt ${tearing ? 'receipt-tearing' : ''}`} aria-label="Queued actions"
     onAnimationEnd={event => { if (event.target === event.currentTarget) { setTearing(false); refreshRound() } }}>
     <h2>TANGLE APPLY</h2><p>queued, nothing sent yet</p>
+    <div className="receipt-perforation">
+      {completed.length > 0 && <button className="tear-button" disabled={tearing || actions.data?.some(a => a.status === 'applying')}
+        onClick={() => setTearConfirm(true)}>✂️ Tear &amp; save</button>}
+    </div>
     {actions.error && <p role="alert">{actions.error.message}</p>}{policy.error && <p role="alert">{policy.error.message}</p>}
     {queued.length === 0 && <p>No queued actions.</p>}
     {queued.map(a => <div className="receipt-item" key={a.id}><b>{a.kind} · {a.prId}</b><span className="receipt-payload">{(() => {
@@ -118,16 +118,6 @@ export function Receipt() {
       .map(a => <ActionResult action={a} key={a.id} />)}
     {completed.length > 0 && <details className="receipt-history"><summary>Completed actions ({completed.length})</summary>
       {completed.map(a => <ActionResult action={a} key={a.id} />)}</details>}
-    <button className="tear-button" disabled={tearing || (!completed.length && !decisions.data?.length) || actions.data?.some(a => a.status === 'applying')}
-      onClick={() => setTearConfirm(true)}>Tear and save</button>
-    {decisions.error && <p role="alert">{decisions.error.message}</p>}
-    {history.error && <p role="alert">{history.error.message}</p>}
-    {(history.data?.length ?? 0) > 0 && <details className="receipt-history saved-receipts"><summary>Saved receipts ({history.data!.length})</summary>
-      {history.data?.map(round => <details className="saved-round" key={round.id}>
-        <summary>{new Date(round.createdAt).toLocaleString()} · {round.actions.length} applied, {round.decisions.length} decisions</summary>
-        {round.actions.map(a => <ActionResult action={a} key={a.id} />)}
-        {round.decisions.map(d => <p key={d.id}>{d.prId} · {d.choice === 'fix' && !d.actionId ? 'Still my turn' : d.choice}</p>)}
-      </details>)}</details>}
     {remove.error && <p role="alert">{remove.error.message}</p>}
     {confirm && <Confirmation action={confirm} onClose={() => setConfirm(null)} />}</aside>
     {tearConfirm && <TearConfirmation onClose={() => setTearConfirm(false)}

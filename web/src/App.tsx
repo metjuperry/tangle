@@ -12,6 +12,7 @@ import type { Decision } from './deck/Untangle'
 import type { Action } from './deck/Receipt'
 import { ViewLoading } from './theme/ViewLoading'
 import { activeDecisionIds } from './deck/progress'
+import { ReceiptHistory } from './deck/ReceiptHistory'
 const Untangle = lazy(() => import('./deck/Untangle').then(module => ({ default: module.Untangle })))
 
 type Owner = { id: string; kind: 'org' | 'user'; watched: boolean }
@@ -101,6 +102,7 @@ function Workspace() {
   const [switching, startTransition] = useTransition()
   const [navigationError, setNavigationError] = useState('')
   const [creatingSticky, setCreatingSticky] = useState(false)
+  const [showHistory, setShowHistory] = useState(false)
   const queryClient = useQueryClient()
   useEffect(() => {
     function navigate(next: string, updateHistory: boolean) {
@@ -173,7 +175,10 @@ function Workspace() {
       title={others === 0 ? 'Every PR on this board is authored by you.' : 'Fade cards authored by other people, not cards waiting on a reviewer.'}>
       {others === 0 ? 'No others’ PRs to dim' : dimOthers ? 'Show others’ PRs' : 'Dim others’ PRs'}</button>
     {path === '/' && <button className="header-button" onClick={() => setCreatingSticky(true)}>New sticky</button>}
-    <button className="header-button" disabled={sync.isPending} onClick={() => sync.mutate()}>{sync.isPending ? 'Syncing…' : 'Sync'}</button><a className="header-button" href="/settings">Settings</a></header>
+    <button className="header-button" disabled={sync.isPending} onClick={() => sync.mutate()}>{sync.isPending ? 'Syncing…' : 'Sync'}</button>
+    <button className="header-button" onClick={() => setShowHistory(true)}>History</button>
+    <a className="header-button" href="/settings">Settings</a></header>
+    {showHistory && <ReceiptHistory onClose={() => setShowHistory(false)} />}
     {creatingSticky && <NewSticky onClose={() => setCreatingSticky(false)} />}
     {(status || sync.error) && <div className={`notice ${sync.error ? 'notice-error' : ''}`} role={sync.error ? 'alert' : 'status'}>{sync.error?.message ?? status}</div>}
     {navigationError && <div className="notice notice-error" role="alert">{navigationError}</div>}

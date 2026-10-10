@@ -128,7 +128,14 @@ a { color: var(--yarn); }
 .settings-save { flex-shrink: 0; padding: 16px 32px; background: #eee5d4; border-top: 1px solid #cfc3ac; box-shadow: 0 -4px 12px #221c150a; display: flex; align-items: center; gap: 16px; flex-wrap: wrap; }.settings-save > span { flex: 1; font-size: 13px; color: #5e564b; }.settings-save button { background: var(--ink); color: var(--paper); }.settings-save p { width: 100%; margin: 0; }
 .ai-call-row { padding: 14px 16px; margin: 10px 0; border: 1px solid #e2d7c3; border-radius: 5px; background: #fffdf8; font-family: inherit; }
 .ai-call-heading { display: flex; justify-content: space-between; gap: 12px; font-size: 14px; }.ai-call-heading > span { font-size: 12px; color: #5e564b; }.ai-call-row p { font-size: 14px; line-height: 21px; margin: 8px 0; }.ai-call-row small { display: block; margin-top: 10px; font-family: 'IBM Plex Mono',monospace; font-size: 10px; color: #5e564b; }.ai-call-row summary { cursor: pointer; font-size: 12px; }.ai-call-row li { font-family: 'IBM Plex Mono',monospace; font-size: 11px; margin: 6px 0; }
-.receipt .tear-button { display: block; width: 100%; margin-top: 18px; padding: 10px; border: 1px dashed var(--ink); background: var(--ink); color: var(--paper); }
+.receipt-perforation { display: flex; align-items: center; gap: 8px; min-height: 24px; margin: 12px 0; }
+.receipt-perforation::before,.receipt-perforation::after { content: ''; flex: 1; border-top: 2px dashed #cfc3ac; }
+.receipt .tear-button { flex-shrink: 0; width: auto; margin: 0; padding: 3px 5px; border: 0; background: transparent; color: var(--ink); font-size: 11px; }
+.receipt .tear-button:not(:disabled):hover { color: var(--yarn); text-decoration: underline; }
+.receipt-history-dialog { width: min(620px,calc(100% - 32px)); max-height: calc(100dvh - 48px); overflow-y: auto; }
+.history-heading { display: flex; align-items: center; justify-content: space-between; gap: 12px; }
+.history-heading h2 { margin: 0; }.history-heading button { margin: 0; }
+.receipt-history-dialog .saved-round { padding: 12px 0; border-top: 1px dashed #cfc3ac; }.receipt-history-dialog summary { cursor: pointer; line-height: 20px; }
 .receipt-history { margin-top: 16px; border-top: 1px dashed #cfc3ac; padding-top: 12px; }.receipt-history summary { cursor: pointer; line-height: 20px; }.saved-round { margin: 10px 0; font-size: 11px; }.saved-round p { overflow-wrap: anywhere; }
 .receipt-tearing { pointer-events: none; animation: tear-receipt .45s ease-in-out; transform-origin: top left; }
 @keyframes tear-receipt { 45% { transform: translateY(12px) rotate(-4deg); opacity: .9; } 100% { transform: translate(70px,80px) rotate(12deg); opacity: 0; } }

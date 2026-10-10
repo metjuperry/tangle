@@ -10,6 +10,13 @@ test('progress counts only distinct decisions for current own PRs', () => {
 })
 test('tear saves the round, resets beads and makes open PRs available again', async ({ page }) => {
   let decisionCount = 0
+  let torn = false
+  await page.route('**/api/actions', async route => {
+    if (route.request().method() !== 'GET' || torn) { await route.continue(); return }
+    await route.fulfill({ json: [{ id: 'completed-tear-fixture', prId: 'example/repo#49', kind: 'comment',
+      payload: '{}', status: 'applied', result: '{}' }] })
+  })
+  page.on('response', response => { if (response.url().endsWith('/api/receipts/tear') && response.ok()) torn = true })
   page.on('request', request => { if (request.url().endsWith('/api/decisions') && request.method() === 'POST') decisionCount++ })
   await page.emulateMedia({ reducedMotion: 'reduce' })
   await page.goto('/untangle')
@@ -20,18 +27,37 @@ test('tear saves the round, resets beads and makes open PRs available again', as
   await page.getByRole('button', { name: 'Wait W', exact: true }).click()
   await expect.poll(() => decisionCount).toBe(1)
   const receipt = page.getByRole('complementary', { name: 'Queued actions' })
-  await receipt.getByRole('button', { name: 'Tear and save', exact: true }).click()
+  await receipt.getByRole('button', { name: '✂️ Tear & save', exact: true }).click()
   await expect(page.getByRole('dialog')).toContainText('All open PRs return to Untangle')
   await page.getByRole('dialog').getByRole('button', { name: 'Cancel', exact: true }).click()
   await expect(page.locator('.knot-meter')).not.toContainText('Untied 0 of')
-  await receipt.getByRole('button', { name: 'Tear and save', exact: true }).click()
+  await receipt.getByRole('button', { name: '✂️ Tear & save', exact: true }).click()
   await page.getByRole('dialog').getByRole('button', { name: 'Tear and save', exact: true }).click()
   await expect(page.locator('.knot-meter')).toContainText('Untied 0 of')
   await expect(page.locator('.deck-ref')).toHaveText(firstCard!)
-  await expect(receipt.locator('.saved-receipts > summary')).toContainText('Saved receipts')
+  await expect(receipt.locator('.saved-receipts')).toHaveCount(0)
+  await page.getByRole('button', { name: 'History', exact: true }).click()
+  await expect(page.getByRole('dialog', { name: 'Receipt history' })).toBeVisible()
+  await expect(page.getByRole('dialog').locator('.saved-round')).toHaveCount(1)
+  await page.getByRole('dialog').getByRole('button', { name: 'Close', exact: true }).click()
   await page.reload()
   await expect(page.locator('.knot-meter')).toContainText('Untied 0 of')
   await expect(page.locator('.deck-ref')).toHaveText(firstCard!)
+})
+test('compact tear control appears only for applied actions and history is in toolbar', async ({ page }) => {
+  await page.route('**/api/actions', route => route.fulfill({ json: [] }))
+  await page.goto('/untangle')
+  await page.getByLabel('Development key').fill('tangle-browser-test-key-not-a-secret')
+  await page.getByRole('button', { name: 'Unlock Tangle' }).click()
+  await expect(page.getByRole('complementary', { name: 'Queued actions' })).toBeVisible()
+  await expect(page.locator('.tear-button')).toHaveCount(0)
+  const controls = await page.locator('.top-bar .header-button').allTextContents()
+  expect(controls.indexOf('History')).toBe(controls.indexOf('Sync') + 1)
+  expect(controls.indexOf('Settings')).toBe(controls.indexOf('History') + 1)
+  await page.getByRole('button', { name: 'History', exact: true }).click()
+  await expect(page.getByRole('dialog', { name: 'Receipt history' })).toBeVisible()
+  await page.keyboard.press('Escape')
+  await expect(page.getByRole('dialog')).toHaveCount(0)
 })
 
 test('closed and merged PR decisions do not inflate meter or active receipt', async ({ page }) => {
@@ -93,6 +119,8 @@ test('applied comment shows a friendly receipt and direct comment link', async (
   const receipt = page.getByRole('complementary', { name: 'Queued actions' })
   await receipt.locator('.receipt-history:not(.saved-receipts) > summary').click()
   await expect(receipt.getByText('Comment posted', { exact: true })).toBeVisible()
+  await expect(receipt.locator('.receipt-perforation .tear-button')).toHaveText('✂️ Tear & save')
+  await expect(receipt.locator('.tear-button')).toHaveCSS('background-color', 'rgba(0, 0, 0, 0)')
   await expect(receipt.getByRole('link', { name: 'View on GitHub' })).toHaveAttribute('href', url)
   await expect(receipt).not.toContainText('addComment')
   await expect(receipt).not.toContainText('commentEdge')
