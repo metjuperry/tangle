@@ -1,5 +1,37 @@
 import { test, expect } from '../../web/node_modules/@playwright/test'
 import AxeBuilder from '../../web/node_modules/@axe-core/playwright'
+import { packLanes, stackSize } from '../../web/src/board/packing'
+
+test('deterministic packing balances three lanes and long stacks stay three rows tall', () => {
+  expect(stackSize(10)).toEqual({ width: 776, height: 538 })
+  const items = Array.from({ length: 10 }, (_, i) => ({ id: `repo-${i}`, width: i === 0 ? 800 : 232, height: i === 0 ? 600 : 300 }))
+  const packed = packLanes(items)
+  expect([...packed]).toEqual([...packLanes([...items].reverse())])
+  expect(new Set([...packed.values()].map(p => p.y)).size).toBe(3)
+  for (const a of items) for (const b of items) {
+    if (a.id === b.id) continue
+    const p = packed.get(a.id)!, q = packed.get(b.id)!
+    expect(p.x + a.width <= q.x || q.x + b.width <= p.x || p.y + a.height <= q.y || q.y + b.height <= p.y).toBeTruthy()
+  }
+})
+test('ten-PR branch stack wraps into ordered columns without a tall single column', async ({ page }) => {
+  await page.route('**/api/board', async route => {
+    const response = await route.fetch()
+    const board = await response.json()
+    const source = board.cards[0]
+    board.cards = Array.from({ length: 10 }, (_, i) => ({ ...source, id: `example/stack#${i + 1}`, repoId: 'example/stack',
+      number: i + 1, title: `Milestone ${i + 1}`, batchId: null, headRef: `m-${i + 1}`, baseRef: i === 0 ? 'main' : `m-${i}` }))
+    board.positions = []
+    board.strings = []
+    await route.fulfill({ json: board })
+  })
+  await open(page)
+  await expect(page.locator('.stack-member')).toHaveCount(10)
+  const members = await page.locator('.stack-member').evaluateAll(elements => elements.map(el => ({ x: el.getBoundingClientRect().x, y: el.getBoundingClientRect().y })))
+  expect(new Set(members.map(p => Math.round(p.y))).size).toBe(3)
+  expect(new Set(members.map(p => Math.round(p.x))).size).toBe(4)
+  await expect(page.locator('.stack-member .card-meta b')).toHaveText(Array.from({ length: 10 }, (_, i) => `#${i + 1}`))
+})
 
 async function open(page: import('../../web/node_modules/@playwright/test').Page) {
   await page.goto('/')

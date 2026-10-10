@@ -20,7 +20,7 @@ Solid red yarn is a rule link: an explicit reference, a branch stack or shared c
 
 Tie by dragging pin to pin or choose Tie a string on a card back and pick the other card or sticky. Labels are optional. Cut strings stay cut after sync; the Cut strings list lets you re-tie them. Notes, labels and positions are local data that sync never overwrites.
 
-Five or more similar PRs by one author in one repo within 14 days can form a title batch. Clear base/head branch chains appear as ordered stacks, base first. Arrange separately lets you move members; Group stack again restores the automatic layout and clears only that stack's saved positions.
+Five or more similar PRs by one author in one repo within 14 days can form a title batch. Clear base/head branch chains appear as ordered stacks, base first, filling three rows before continuing in the next column. Repositories are packed into the shortest of three horizontal lanes by their actual size, without AI. Arrange separately lets you move members; Group stack again restores the automatic layout and clears only that stack's saved positions.
 
 New sticky in the toolbar creates a goal such as a release. Tie PRs across repos to it and add notes. Its knots count merged PRs, not closed-but-unmerged PRs. You can rename, recolor or archive the sticky.
 

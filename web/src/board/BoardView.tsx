@@ -8,6 +8,7 @@ import { findStacks } from './stacks'
 import { useTie } from './authoring'
 import { Search } from './Search'
 import { focusNearestCard } from './keyboard'
+import { packLanes, stackSize } from './packing'
 
 type ZoneData = { title: string; mine: number; others: number; width: number; height: number; myTurn: number; stale: number; firstCard: string }
 type CardData = { card: Card; members: Card[]; stack?: boolean }
@@ -79,7 +80,7 @@ function StackNode({ data }: NodeProps<PrNode>) {
     <div className="stack-heading">{data.members.length} stacked PRs <span>base first</span></div>
     <button className="nodrag nopan" onClick={() => separate.mutate()} disabled={separate.isPending}>Arrange separately</button>
     {separate.error && <p role="alert">{separate.error.message}</p>}
-    <div className="stack-members">{data.members.map((card, index) => <div className="stack-member" key={card.id}>
+    <div className="stack-members" style={{ gridTemplateRows: `repeat(${Math.min(3, data.members.length)}, 142px)` }}>{data.members.map((card, index) => <div className="stack-member" key={card.id}>
       {index > 0 && <span className="stack-dependency" aria-label={`Depends on #${data.members[index - 1].number}`}>depends on #{data.members[index - 1].number}</span>}
       <CardPaper data={{ card, members: [card] }} />
     </div>)}</div>
@@ -143,9 +144,12 @@ function layout(board: Board): { nodes: (Zone | PrNode | StickyNodeType)[]; edge
       .sort((a, b) => rank(a.members[0]) - rank(b.members[0]) || (b.members[0].facts?.idleDays ?? 0) - (a.members[0].facts?.idleDays ?? 0) || a.members[0].number - b.members[0].number)
     const columns = Math.min(3, Math.max(1, Math.ceil(Math.sqrt(entries.length))))
     const savedPositions = (board.positions ?? []).filter(p => cards.some(c => p.nodeRef === `pr:${c.id}`))
-    const width = Math.max(columns * 200 + 32, ...savedPositions.map(p => p.x + 200))
+    const entryWidths = entries.map(e => e.stack ? stackSize(e.members.length).width : 176)
+    const columnWidths = Array.from({ length: columns }, (_, column) =>
+      Math.max(...entryWidths.filter((_, index) => index % columns === column)) + 24)
+    const width = Math.max(columnWidths.reduce((sum, w) => sum + w, 0) + 32, ...savedPositions.map(p => p.x + 200))
     const rowHeights = Array.from({ length: Math.ceil(entries.length / columns) }, (_, row) =>
-      Math.max(...entries.slice(row * columns, (row + 1) * columns).map(e => e.stack ? 92 + e.members.length * 142 : 136)))
+      Math.max(...entries.slice(row * columns, (row + 1) * columns).map(e => e.stack ? stackSize(e.members.length).height : 136)))
     const height = Math.max(rowHeights.reduce((sum, h) => sum + h, 0) + 68, ...savedPositions.map(p => p.y + 136))
     const zoneId = `zone:${repo}`
     nodes.push({ id: zoneId, type: 'zone', position: { x, y }, data: { title: repo.split('/')[1], mine: cards.filter(p => p.isMine).length, others: cards.filter(p => !p.isMine).length, width, height,
@@ -153,9 +157,9 @@ function layout(board: Board): { nodes: (Zone | PrNode | StickyNodeType)[]; edge
       style: { width, height, pointerEvents: 'all' }, selectable: false, draggable: false })
     entries.forEach(({ id, members, stack }, i) => {
       nodes.push({ id, type: stack ? 'stack' : members.length > 1 ? 'batch' : 'pr', parentId: zoneId, extent: 'parent',
-        position: { x: 24 + (i % columns) * 200, y: 56 + rowHeights.slice(0, Math.floor(i / columns)).reduce((sum, h) => sum + h, 0) },
+        position: { x: 24 + columnWidths.slice(0, i % columns).reduce((sum, w) => sum + w, 0), y: 56 + rowHeights.slice(0, Math.floor(i / columns)).reduce((sum, h) => sum + h, 0) },
         data: { card: members[0], members, stack },
-        style: { width: 176, height: stack ? 92 + members.length * 142 : 110, pointerEvents: 'all' }, draggable: !stack, selectable: false })
+        style: { width: stack ? stackSize(members.length).width : 176, height: stack ? stackSize(members.length).height : 110, pointerEvents: 'all' }, draggable: !stack, selectable: false })
       const node = nodes[nodes.length - 1]
       const saved = board.positions?.find(p => p.nodeRef === `pr:${members[0].id}`)
       if (saved) node.position = { x: saved.x, y: saved.y }
@@ -164,19 +168,8 @@ function layout(board: Board): { nodes: (Zone | PrNode | StickyNodeType)[]; edge
     x += width + 36
   }
   const zones = nodes.filter((node): node is Zone => node.type === 'zone')
-  const repoRows = Math.min(3, zones.length)
-  const heights = Array.from({ length: repoRows }, (_, row) =>
-    Math.max(...zones.filter((_, index) => index % repoRows === row).map(zone => zone.data.height)))
-  const widths = Array.from({ length: Math.ceil(zones.length / 3) }, (_, column) =>
-    Math.max(...zones.slice(column * 3, column * 3 + 3).map(zone => zone.data.width)))
-  zones.forEach((zone, index) => {
-    const row = index % repoRows
-    const column = Math.floor(index / repoRows)
-    zone.position = {
-      x: 24 + widths.slice(0, column).reduce((sum, width) => sum + width + 36, 0),
-      y: 36 + heights.slice(0, row).reduce((sum, height) => sum + height + 36, 0),
-    }
-  })
+  const packed = packLanes(zones.map(zone => ({ id: zone.id, width: zone.data.width, height: zone.data.height })))
+  zones.forEach(zone => { zone.position = packed.get(zone.id)! })
   const boardBottom = zones.reduce((bottom, zone) => Math.max(bottom, zone.position.y + zone.data.height), 36)
   for (const [index, sticky] of (board.stickies ?? []).entries()) {
     const id = `sticky:${sticky.id}`
