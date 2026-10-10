@@ -60,7 +60,7 @@ Offline API tests prove explicit confirmation, disabled Apply, exactly-once clai
 
 ## Decisions/deviations
 
-Fix offers **Still my turn**, which acknowledges the review work and moves on without changing computed facts or creating a GitHub action. There is no to-do list. **Draft a comment instead** is a separate option. Like Wait/Snooze, the local decision persists and Undo brings its card back.
+Fix opens one action dialog with **Still my turn** selected in its dropdown. Recording it acknowledges the review work and moves on without changing computed facts or creating a GitHub action. Select **Post comment** or another action in the same dropdown to compose it without opening a second dialog. There is no to-do list. Like Wait/Snooze, the local decision persists and Undo brings its card back.
 
 Board/Untangle navigation now stays in the app. A paper-and-yarn loading overlay keeps the previous view visible while the lazy deck and required data load, with a static reduced-motion version and explicit errors. Cached switches have no artificial delay; browser back/forward is supported.
 

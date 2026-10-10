@@ -14,7 +14,7 @@ function ActionResult({ action }: { action: Action }) {
     <a href={actionResultUrl(action.prId, action.kind, action.result)} target="_blank" rel="noreferrer">View on GitHub</a>
   </div>
 }
-export function ActionComposer({ prId, onClose, onQueued, initialKind = 'comment', onLocalDecision }: { prId: string; onClose: () => void; onQueued?: (id: string) => void; initialKind?: string; onLocalDecision?: () => void }) {
+export function ActionComposer({ prId, onClose, onQueued, initialKind = 'comment', onLocalDecision, allowStillMyTurn = false }: { prId: string; onClose: () => void; onQueued?: (id: string) => void; initialKind?: string; onLocalDecision?: () => Promise<unknown>; allowStillMyTurn?: boolean }) {
   const [kind, setKind] = useState(initialKind)
   const [text, setText] = useState('')
   const [reviewer, setReviewer] = useState('')
@@ -24,17 +24,29 @@ export function ActionComposer({ prId, onClose, onQueued, initialKind = 'comment
   const save = useMutation({ mutationFn: () => write<Action>('/api/actions', 'POST', { prId, kind,
     payload: kind === 'comment' ? { text } : kind === 'request_review' ? { reviewer } : {} }),
     onSuccess: async action => { await client.invalidateQueries({ queryKey: ['actions'] }); onQueued?.(action.id); onClose() } })
-  return <dialog ref={dialog} className="new-sticky-dialog" aria-labelledby="queue-heading" onCancel={onClose}>
-    <h2 id="queue-heading">Queue action · {prId}</h2><p>Nothing is posted until you confirm Apply on the receipt.</p>
-    <form onSubmit={e => { e.preventDefault(); save.mutate() }}>
-      <label>Action kind<select value={kind} onChange={e => setKind(e.target.value)}><option value="comment">Post comment</option><option value="request_review">Request review</option><option value="close">Close PR</option><option value="merge">Merge PR</option></select></label>
+  const local = useMutation({
+    mutationFn: async () => {
+      if (!onLocalDecision) throw new Error('Local decision is unavailable.')
+      await onLocalDecision()
+    },
+    onSuccess: onClose,
+  })
+  const busy = save.isPending || local.isPending
+  return <dialog ref={dialog} className="new-sticky-dialog" aria-labelledby="queue-heading"
+    onCancel={event => { if (busy) event.preventDefault(); else onClose() }}>
+    <h2 id="queue-heading">{allowStillMyTurn ? 'Fix' : 'Queue action'} · {prId}</h2>
+    <p>{kind === 'still_my_turn' ? 'Acknowledge your work and move to the next card. No GitHub action is queued; the computed turn stays unchanged.' : 'Nothing is posted until you confirm Apply on the receipt.'}</p>
+    <form onSubmit={e => { e.preventDefault(); if (kind === 'still_my_turn') local.mutate(); else save.mutate() }}>
+      <label>Action kind<select autoFocus disabled={busy} value={kind} onChange={e => { setKind(e.target.value); save.reset(); local.reset() }}>
+        {allowStillMyTurn && <option value="still_my_turn">Still my turn</option>}
+        <option value="comment">Post comment</option><option value="request_review">Request review</option><option value="close">Close PR</option><option value="merge">Merge PR</option></select></label>
       {kind === 'comment' && <label>Comment text<textarea value={text} onChange={e => setText(e.target.value)} required /></label>}
       {kind === 'request_review' && <label>Reviewer login<input value={reviewer} onChange={e => setReviewer(e.target.value)} required /></label>}
       {kind === 'merge' && <p>Tangle captures the current PR version from GitHub when you queue this merge. If new commits arrive before Apply, you’ll need to queue it again.</p>}
       {kind === 'close' && <p>Closes this PR without posting a comment. Queue a separate comment if needed.</p>}
-      <button disabled={save.isPending}>{save.isPending && kind === 'merge' ? 'Checking PR version…' : 'Queue action'}</button><button type="button" disabled={save.isPending} onClick={onClose}>Cancel</button>
-      {onLocalDecision && <button type="button" onClick={onLocalDecision}>Record decision without GitHub action</button>}
-      {save.error && <p role="alert">{save.error.message}</p>}
+      <button disabled={busy}>{kind === 'still_my_turn' ? (local.isPending ? 'Saving…' : 'Record decision') : save.isPending && kind === 'merge' ? 'Checking PR version…' : 'Queue action'}</button><button type="button" disabled={busy} onClick={onClose}>Cancel</button>
+      {onLocalDecision && kind !== 'still_my_turn' && <button type="button" disabled={busy} onClick={() => local.mutate()}>Record decision without GitHub action</button>}
+      {(save.error || local.error) && <p role="alert">{save.error?.message ?? local.error?.message}</p>}
     </form></dialog>
 }
 function Confirmation({ action, onClose }: { action: Action; onClose: () => void }) {
