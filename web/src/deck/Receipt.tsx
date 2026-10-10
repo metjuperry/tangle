@@ -1,6 +1,7 @@
 import { useEffect, useRef, useState } from 'react'
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 import { api, write } from '../api/client'
+import { actionResultLabel, actionResultUrl } from './actionResult'
 
 export type Action = { id: string; prId: string; kind: string; payload: string; status: string; result: string | null }
 export function ActionComposer({ prId, onClose, onQueued, initialKind = 'comment', onLocalDecision }: { prId: string; onClose: () => void; onQueued?: (id: string) => void; initialKind?: string; onLocalDecision?: () => void }) {
@@ -63,7 +64,11 @@ export function Receipt() {
       <button disabled={!policy.data?.enabled || a.prId.split('#')[0] !== policy.data.sandboxRepo} onClick={() => setConfirm(a)}>Apply</button>
     </div>)}<p className="receipt-total">TOTAL <b>{queued.length}</b></p>
     <p>{policy.data?.enabled ? `Apply restricted to ${policy.data.sandboxRepo ?? 'no sandbox'}.` : 'Apply disabled. Configure a sandbox first.'}</p>
-    {actions.data?.filter(a => a.status !== 'queued' && a.status !== 'dismissed').map(a => <p key={a.id}>{a.prId}: {a.status} · {a.result}</p>)}
+    {actions.data?.filter(a => a.status !== 'queued' && a.status !== 'dismissed').map(a => <div className={`receipt-item receipt-result ${a.status === 'failed' ? 'receipt-failed' : ''}`} key={a.id}>
+      <b>{actionResultLabel(a.kind, a.status)}</b><span>{a.prId}</span>
+      {a.status === 'failed' && <p>{a.result ?? 'No result recorded. Check GitHub before retrying.'}</p>}
+      <a href={actionResultUrl(a.prId, a.kind, a.result)} target="_blank" rel="noreferrer">View on GitHub</a>
+    </div>)}
     {remove.error && <p role="alert">{remove.error.message}</p>}
     {confirm && <Confirmation action={confirm} onClose={() => setConfirm(null)} />}</aside>
 }

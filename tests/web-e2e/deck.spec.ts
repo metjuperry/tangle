@@ -1,4 +1,35 @@
 import { test, expect } from '../../web/node_modules/@playwright/test'
+import { actionResultLabel, actionResultUrl } from '../../web/src/deck/actionResult'
+
+test('receipt result summaries preserve action meaning and safe GitHub links', () => {
+  const pr = 'metjuperry/tangle-sandbox#1'
+  const url = 'https://github.com/metjuperry/tangle-sandbox/pull/1#issuecomment-6099889517'
+  expect(actionResultUrl(pr, 'comment', JSON.stringify({ addComment: { commentEdge: { node: { url } } } }))).toBe(url)
+  expect(actionResultLabel('comment', 'applied')).toBe('Comment posted')
+  expect(actionResultLabel('merge', 'applied')).toBe('PR merged')
+  expect(actionResultLabel('close', 'applied')).toBe('PR closed')
+  expect(actionResultLabel('request_review', 'applied')).toBe('Review requested')
+  expect(actionResultLabel('comment', 'failed')).toBe('Action failed or outcome uncertain')
+  expect(actionResultUrl(pr, 'comment', 'not JSON')).toBe(url.split('#')[0])
+  expect(actionResultUrl(pr, 'comment', JSON.stringify({ addComment: { commentEdge: { node: { url: 'javascript:alert(1)' } } } }))).toBe(url.split('#')[0])
+})
+test('applied comment shows a friendly receipt and direct comment link', async ({ page }) => {
+  const url = 'https://github.com/metjuperry/tangle-sandbox/pull/1#issuecomment-6099889517'
+  await page.route('**/api/actions', async route => {
+    if (route.request().method() !== 'GET') { await route.continue(); return }
+    await route.fulfill({ json: [{ id: 'applied-fixture', prId: 'metjuperry/tangle-sandbox#1', kind: 'comment',
+      payload: '{"Text":"Test comment"}', status: 'applied',
+      result: JSON.stringify({ addComment: { commentEdge: { node: { url } } } }) }] })
+  })
+  await page.goto('/untangle')
+  await page.getByLabel('Development key').fill('tangle-browser-test-key-not-a-secret')
+  await page.getByRole('button', { name: 'Unlock Tangle' }).click()
+  const receipt = page.getByRole('complementary', { name: 'Queued actions' })
+  await expect(receipt.getByText('Comment posted', { exact: true })).toBeVisible()
+  await expect(receipt.getByRole('link', { name: 'View on GitHub' })).toHaveAttribute('href', url)
+  await expect(receipt).not.toContainText('addComment')
+  await expect(receipt).not.toContainText('commentEdge')
+})
 
 test('Fix acknowledges still my turn without a to-do or GitHub action', async ({ page }) => {
   let queued = 0
