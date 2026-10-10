@@ -1,4 +1,4 @@
-import { lazy, Suspense, useEffect, useRef, useState } from 'react'
+import { lazy, Suspense, useEffect, useRef, useState, useTransition } from 'react'
 import { QueryClient, QueryClientProvider, useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 import './App.css'
 import { api, type Board } from './api/client'
@@ -9,6 +9,8 @@ import { useLiveEvents } from './api/events'
 import { NewSticky } from './card/AuthoringPanel'
 import { friendlyAiText } from './api/aiText'
 import type { Decision } from './deck/Untangle'
+import type { Action } from './deck/Receipt'
+import { ViewLoading } from './theme/ViewLoading'
 const Untangle = lazy(() => import('./deck/Untangle').then(module => ({ default: module.Untangle })))
 
 type Owner = { id: string; kind: 'org' | 'user'; watched: boolean }
@@ -90,9 +92,51 @@ function SettingsPage() {
   </section>
 }
 function Workspace() {
+  const [path, setPath] = useState(window.location.pathname)
+  const [destination, setDestination] = useState(path)
+  const [switching, startTransition] = useTransition()
+  const [navigationError, setNavigationError] = useState('')
   const [creatingSticky, setCreatingSticky] = useState(false)
   const queryClient = useQueryClient()
-  const path = window.location.pathname
+  useEffect(() => {
+    function navigate(next: string, updateHistory: boolean) {
+      if (next === path) return
+      setDestination(next)
+      setNavigationError('')
+      startTransition(async () => {
+        try {
+          await queryClient.ensureQueryData({ queryKey: ['board'], queryFn: () => api<Board>('/api/board') })
+          if (next === '/untangle') {
+            await Promise.all([
+              import('./deck/Untangle'),
+              queryClient.ensureQueryData({ queryKey: ['decisions'], queryFn: () => api<Decision[]>('/api/decisions') }),
+              queryClient.ensureQueryData({ queryKey: ['actions'], queryFn: () => api<Action[]>('/api/actions') }),
+              queryClient.ensureQueryData({ queryKey: ['apply-policy'], queryFn: () => api<{ enabled: boolean; sandboxRepo: string | null }>('/api/actions/policy') }),
+            ])
+          }
+          startTransition(() => {
+            if (updateHistory) window.history.pushState(null, '', next)
+            setPath(next)
+          })
+        } catch (error) {
+          setNavigationError(error instanceof Error ? error.message : 'Unable to open the next view.')
+        }
+      })
+    }
+    const click = (event: MouseEvent) => {
+      if (event.defaultPrevented || event.button !== 0 || event.metaKey || event.ctrlKey || event.shiftKey || event.altKey) return
+      const anchor = event.target instanceof Element ? event.target.closest('a') : null
+      if (!anchor || anchor.target || anchor.hasAttribute('download')) return
+      const url = new URL(anchor.href)
+      if (url.origin !== window.location.origin || url.search || url.hash || !['/', '/untangle'].includes(url.pathname)) return
+      event.preventDefault()
+      navigate(url.pathname, true)
+    }
+    const pop = () => navigate(window.location.pathname, false)
+    document.addEventListener('click', click)
+    window.addEventListener('popstate', pop)
+    return () => { document.removeEventListener('click', click); window.removeEventListener('popstate', pop) }
+  }, [path, queryClient])
   const board = useQuery({ queryKey: ['board'], queryFn: () => api<Board>('/api/board') })
   const decisions = useQuery({ queryKey: ['decisions'], queryFn: () => api<Decision[]>('/api/decisions') })
   const status = useLiveEvents()
@@ -127,13 +171,20 @@ function Workspace() {
     <button className="header-button" disabled={sync.isPending} onClick={() => sync.mutate()}>{sync.isPending ? 'Syncing…' : 'Sync'}</button><a className="header-button" href="/settings">Settings</a></header>
     {creatingSticky && <NewSticky onClose={() => setCreatingSticky(false)} />}
     {(status || sync.error) && <div className={`notice ${sync.error ? 'notice-error' : ''}`} role={sync.error ? 'alert' : 'status'}>{sync.error?.message ?? status}</div>}
+    {navigationError && <div className="notice notice-error" role="alert">{navigationError}</div>}
+    <div className="view-stage" aria-busy={switching}>
+    {switching && <ViewLoading destination={destination} />}
+    <Suspense fallback={<ViewLoading destination={destination} />}>
     {path === '/settings' ? <main className="settings-wrap"><SettingsPage /></main> :
-      path === '/untangle' && board.data ? <Suspense fallback={<p role="status">Loading Untangle…</p>}><Untangle board={board.data} /></Suspense> :
+      path === '/untangle' && board.data ? <Untangle board={board.data} /> :
+      path === '/untangle' && board.isPending ? <ViewLoading destination="/untangle" /> :
+      path === '/untangle' && board.error ? <main className="settings-wrap"><p role="alert">{board.error.message}</p></main> :
       path !== '/' ? <main className="settings-wrap"><h1>Page not found</h1><a href="/">Back to the board</a></main> :
       board.error ? <main className="settings-wrap"><p role="alert">{board.error.message}</p></main> :
       board.data ? <main className="board-workspace"><BoardView board={board.data} /><SidePanel board={board.data} />
         {board.data.cards.length === 0 && <div className="board-empty"><h1>Your yarn board</h1><p>No pull requests synced yet.</p><a href="/settings">Choose watched repositories</a></div>}</main> :
-      <main className="settings-wrap"><p role="status">Loading your board…</p></main>}</>
+      <ViewLoading destination="/" />}
+    </Suspense></div></>
 }
 function Shell() {
   const [authenticated, setAuthenticated] = useState(false)

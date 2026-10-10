@@ -52,6 +52,8 @@ Offline API tests prove explicit confirmation, disabled Apply, exactly-once clai
 
 ## Decisions/deviations
 
+Board/Untangle navigation now stays in the app. A paper-and-yarn loading overlay keeps the previous view visible while the lazy deck and required data load, with a static reduced-motion version and explicit errors. Cached switches have no artificial delay; browser back/forward is supported.
+
 - Fix, Ping and Split intent cannot safely become GitHub mutations automatically; the exact action editor makes the actual operation explicit. No generated comment is posted without review.
 - Wait/Snooze persist local decisions but do not enqueue GitHub actions. Snooze leaves the current deck until undo; a time-based snooze/revisit rule is unspecified and not invented.
 - Close posts no comment; queue a separate comment to explain it. Closing another person's PR is blocked.

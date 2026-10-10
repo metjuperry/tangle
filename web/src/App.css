@@ -1,5 +1,16 @@
 :root { --cork: #b98b5b; --paper: #fbf6ea; --aged: #ede0c2; --ink: #221c15; --yarn: #b3262f; --mine-yarn: #1f3f8a; --pin-me: #e4572e; --pin-them: #2d6bd6; --pin-nobody: #8c857b; }
 #root { height: 100dvh; display: flex; flex-direction: column; }
+.view-stage { position: relative; display: flex; flex: 1; min-height: 0; }
+.view-stage > .settings-wrap { flex: 1; }
+.view-loading-overlay { position: absolute; inset: 0; z-index: 60; display: grid; place-items: center; background: #221c154a; backdrop-filter: blur(3px); cursor: progress; }
+.view-loading-paper { display: grid; justify-items: center; gap: 12px; width: min(340px,calc(100% - 40px)); padding: 28px; border-radius: 4px; background: var(--paper); color: var(--ink); box-shadow: 5px 6px 0 #ede0c2,0 14px 36px #221c1559; transform: rotate(-1deg); text-align: center; }
+.view-loading-paper strong { font-size: 19px; }.view-loading-paper > span { font-size: 13px; color: #5e564b; }
+.loading-yarn { width: 120px; height: 64px; overflow: visible; }
+.loading-yarn path { stroke-width: 4; stroke-linecap: round; }
+.loading-yarn-track { stroke: #b3262f29; }
+.loading-yarn-thread { stroke: var(--yarn); stroke-dasharray: 35 65; animation: thread-unwind 1.6s ease-in-out infinite; }
+@keyframes thread-unwind { to { stroke-dashoffset: -100; } }
+@media(prefers-reduced-motion: reduce) { .loading-yarn-thread { stroke-dasharray: none; animation: none; }.view-loading-paper { transform: none; } }
 button, input, select { font: inherit; }
 button, a { -webkit-tap-highlight-color: transparent; }
 button { cursor: pointer; }

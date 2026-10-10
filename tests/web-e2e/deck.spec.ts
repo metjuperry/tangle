@@ -1,5 +1,51 @@
 import { test, expect } from '../../web/node_modules/@playwright/test'
 
+test('view switch keeps board underneath a yarn loader until Untangle is ready', async ({ page }) => {
+  let release!: () => void
+  const ready = new Promise<void>(resolve => { release = resolve })
+  await page.route('**/api/actions', async route => {
+    if (route.request().method() === 'GET') await ready
+    await route.continue()
+  })
+  await page.goto('/')
+  await page.getByLabel('Development key').fill('tangle-browser-test-key-not-a-secret')
+  await page.getByRole('button', { name: 'Unlock Tangle' }).click()
+  await expect(page.getByRole('region', { name: 'Yarn board' })).toBeVisible()
+  await page.getByRole('link', { name: 'Untangle', exact: true }).click()
+  await expect(page.getByText('Gathering your threads…')).toBeVisible()
+  await expect(page.getByRole('region', { name: 'Yarn board' })).toBeVisible()
+  await expect(page.locator('.loading-yarn-thread')).toHaveCSS('animation-name', 'thread-unwind')
+  release()
+  await expect(page.getByRole('region', { name: 'Untangle deck' })).toBeVisible()
+  await expect(page.locator('.view-loading-overlay')).toHaveCount(0)
+  await expect(page).toHaveURL(/\/untangle$/)
+  await page.getByRole('link', { name: 'Board', exact: true }).click()
+  await expect(page.getByRole('region', { name: 'Yarn board' })).toBeVisible()
+  await expect(page).toHaveURL(/\/$/)
+  await page.goBack()
+  await expect(page.getByRole('region', { name: 'Untangle deck' })).toBeVisible()
+})
+
+test('loading overlay is static with reduced motion and exposes navigation failures', async ({ page }) => {
+  await page.emulateMedia({ reducedMotion: 'reduce' })
+  let release!: () => void
+  const ready = new Promise<void>(resolve => { release = resolve })
+  await page.route('**/api/actions', async route => {
+    await ready
+    await route.fulfill({ status: 503, json: { error: 'Receipt unavailable.' } })
+  })
+  await page.goto('/')
+  await page.getByLabel('Development key').fill('tangle-browser-test-key-not-a-secret')
+  await page.getByRole('button', { name: 'Unlock Tangle' }).click()
+  await page.getByRole('link', { name: 'Untangle', exact: true }).click()
+  await expect(page.getByText('Gathering your threads…')).toBeVisible()
+  await expect(page.locator('.loading-yarn-thread')).toHaveCSS('animation-name', 'none')
+  release()
+  await expect(page.getByRole('alert').filter({ hasText: 'Receipt unavailable.' })).toBeVisible()
+  await expect(page.locator('.view-loading-overlay')).toHaveCount(0)
+  await expect(page.getByRole('region', { name: 'Yarn board' })).toBeVisible()
+})
+
 test('Untangle keys, queue, exact confirmation, undo and full deck', async ({ page }) => {
   await page.goto('/untangle')
   await page.getByLabel('Development key').fill('tangle-browser-test-key-not-a-secret')
