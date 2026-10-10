@@ -36,6 +36,8 @@ Use the same development key and database. No new secrets, schema reset, AI call
 
 ## Verification
 
+M4 is [PR #5](https://github.com/metjuperry/tangle/pull/5), based on M3 and left unmerged. Local validation passed 68 .NET tests and 13 browser tests. GitHub still reports no workflow runs for this branch, so remote CI remains unverified.
+
 Browser tests use only the fixture database and fake GitHub reader. They cover pin-drag tying, keyboard pick mode, labels, notes, cuts/re-ties across sync, a sticky tied to two PRs, card movement and zone-relative persisted coordinates after reload.
 
 API tests exercise all three note targets, labels, cuts, re-ties, stored positions, sticky rename/recolor/archive, merged progress after a tied PR merges, and authentication/reference/input failures. Existing sync tests prove authored ties, cuts, labels, notes, stickies and positions survive changed cache writes.
