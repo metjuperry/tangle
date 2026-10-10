@@ -4,6 +4,8 @@
 
 ## Built
 
+Published as [PR #6](https://github.com/metjuperry/tangle/pull/6), based on M4 and left unmerged. Offline validation passed 75 .NET tests and 17 browser tests. The live requirements below remain blocked; no provider call was made.
+
 M5 adds the official `Anthropic` C# SDK, `claude-haiku-5-5`, structured output schemas, versioned prompts, the design's `IDecider`, bounded PR context and proposed verdicts/intent. Pair candidates use shared title words, folders or author/date; sticky membership is also judged. Pairs are sent in batches of at most 20, and suggestions appear only above 0.75. Existing strings, including cuts, are skipped.
 
 Repo AI switches default off. Context includes only enabled repositories; disabled linked PRs and their labels are excluded. No diffs or file contents are sent. The server also defaults `Ai:Enabled` off. All implementation validation used synthetic responses with a fake HTTP handler or local fixtures; **no real AI call was made**.
