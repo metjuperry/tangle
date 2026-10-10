@@ -54,6 +54,8 @@ Metju subsequently confirmed the sandbox close and merge succeeded and Sync remo
 
 Saved receipt history is opened with **History** between Sync and Settings in the top bar. The active receipt does not contain saved-round history. Once there are applied actions, a compact **✂️ Tear & save** text control appears between dashed perforation lines; it is absent before any action is applied.
 
+When no PRs await decisions, Untangle switches to a distinct completion panel with a straight untangled thread and Back to the board. It no longer renders the pinned card stack, progress-order prompt or disabled verdict buttons. Undo remains available for the current round and restores the deck; the receipt remains accessible.
+
 Published as [PR #7](https://github.com/metjuperry/tangle/pull/7), based on M5 and left unmerged. Offline validation passed 83 .NET tests and 22 browser tests. GitHub reports no workflow runs for this branch, so remote CI remains unverified.
 
 Offline API tests prove explicit confirmation, disabled Apply, exactly-once claiming, undo removing queued actions, and GitHub ownership/head-SHA guards. Browser tests cover a full deck with undo, exact receipt text, cancellation versus confirmation, and reduced-motion rendering. Fake HTTP handlers substitute for every GitHub mutation; no paid AI calls are required.

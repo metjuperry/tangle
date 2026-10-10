@@ -82,7 +82,7 @@ test('closed and merged PR decisions do not inflate meter or active receipt', as
   await page.getByLabel('Development key').fill('tangle-browser-test-key-not-a-secret')
   await page.getByRole('button', { name: 'Unlock Tangle' }).click()
   await expect(page.locator('.knot-meter')).toContainText('Untied 1 of 1')
-  await expect(page.locator('.deck-progress')).toContainText('1 of 1 decided')
+  await expect(page.locator('.deck-progress')).toHaveCount(0)
   await expect(page.getByRole('heading', { name: 'All 1 untangled' })).toBeVisible()
   const receipt = page.getByRole('complementary', { name: 'Queued actions' })
   await expect(receipt).toContainText('No queued actions.')
@@ -244,6 +244,11 @@ test('Untangle keys, queue, exact confirmation, undo and full deck', async ({ pa
     await response
   }
   await expect(page.getByRole('heading', { name: `All ${mine} untangled` })).toBeVisible()
+  await expect(page.locator('.deck-paper')).toHaveCount(0)
+  await expect(page.locator('.verdict-bar')).toHaveCount(0)
+  await expect(page.locator('.deck-progress')).toHaveCount(0)
+  await expect(page.locator('.untangle-complete')).toBeVisible()
+  await expect(page.getByRole('link', { name: 'Back to the board', exact: true })).toBeVisible()
   await page.keyboard.press('u')
   await expect(page.getByRole('button', { name: 'Wait W', exact: true })).toBeEnabled()
 })

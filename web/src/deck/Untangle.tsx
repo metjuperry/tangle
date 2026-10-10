@@ -51,18 +51,24 @@ export function Untangle({ board }: { board: Board }) {
   }, [card, decide, undo, choose])
   const exit = reduced ? { opacity: 0 } : { opacity: 0, x: exitChoice === 'merge' ? 600 : exitChoice === 'close' ? -600 : 0,
     y: exitChoice === 'snooze' ? 500 : exitChoice === 'merge' || exitChoice === 'close' ? 0 : -500 }
-  return <main className="untangle-workspace"><section className="deck" aria-label="Untangle deck">
-    <p className="deck-progress">{decided.size} of {order.length} decided · your turn first, then the dustiest</p>
+  return <main className="untangle-workspace"><section className={`deck ${card ? '' : 'deck-finished'}`} aria-label="Untangle deck">
+    {card && <p className="deck-progress">{decided.size} of {order.length} decided · your turn first, then the dustiest</p>}
     {decisions.error && <p role="alert">{decisions.error.message}</p>}
-    <AnimatePresence mode="wait"><motion.div className="deck-paper" key={card?.id ?? 'done'} initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={exit} transition={{ duration: reduced ? .1 : .3 }}>
+    <AnimatePresence mode="wait"><motion.div className={card ? 'deck-paper' : 'untangle-complete'} key={card?.id ?? 'done'} initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={exit} transition={{ duration: reduced ? .1 : .3 }}>
       {card ? <><span className="deck-ref">{card.id}</span><h2>{card.title}</h2><p>{card.facts?.turnReason}</p>
         {card.verdict && <div className="fact-block"><p className="eyebrow">Suggested · {actionLabel(card.verdict.action)}</p><p>{friendlyAiText(card.verdict.reason)}</p></div>}
         <button onClick={() => { setPendingChoice('fix'); setAllowStillMyTurn(false); setComposerKind('comment'); setComposer(true) }}>Queue a GitHub action</button><p className="quiet">Fix can acknowledge “Still my turn” without posting. Merge, Ping and Close open an action editor. Nothing is sent yet.</p></> :
-        <><h2>All {order.length} untangled</h2><p>Review your receipt before applying anything.</p><a href="/">Back to the board</a></>}
+        <><svg className="untangled-thread" width="100" height="36" viewBox="0 0 100 36" fill="none" aria-hidden="true">
+          <path d="M8 18H92" stroke="currentColor" strokeWidth="3" strokeLinecap="round" />
+          <circle cx="8" cy="18" r="4" fill="currentColor" /><circle cx="92" cy="18" r="4" fill="currentColor" />
+        </svg><p className="completion-caption">Nothing left in the deck</p>
+          <h2>{order.length > 0 ? `All ${order.length} untangled` : 'No PRs awaiting a decision'}</h2>
+          <p>Your board is still here. Review any queued actions on the receipt, or head back to your cards.</p>
+          <a className="completion-link" href="/">Back to the board</a></>}
     </motion.div></AnimatePresence>
-    <div className="verdict-bar">{choices.map(([choice, label, key]) => <button key={choice} disabled={!card || decide.isPending}
-      className={card?.verdict?.action === choice ? 'suggested-choice' : ''} onClick={() => choose(choice)}>{label}<small>{key}</small></button>)}</div>
-    <button disabled={!decisions.data?.length || undo.isPending} onClick={() => undo.mutate()}>Undo last decision · U</button>
+    {card && <div className="verdict-bar">{choices.map(([choice, label, key]) => <button key={choice} disabled={decide.isPending}
+      className={card.verdict?.action === choice ? 'suggested-choice' : ''} onClick={() => choose(choice)}>{label}<small>{key}</small></button>)}</div>}
+    {!!decisions.data?.length && <button className={card ? undefined : 'completion-undo'} disabled={undo.isPending} onClick={() => undo.mutate()}>Undo last decision · U</button>}
     {((decide.error && !composer) || undo.error) && <p role="alert">{decide.error?.message ?? undo.error?.message}</p>}
     {composer && card && <ActionComposer prId={card.id} initialKind={composerKind} allowStillMyTurn={allowStillMyTurn}
       onClose={() => setComposer(false)} onQueued={actionId => decide.mutate({ choice: pendingChoice, actionId })}
