@@ -4,6 +4,10 @@ using Microsoft.AspNetCore.Hosting;
 using Microsoft.AspNetCore.Mvc.Testing;
 using Microsoft.Data.Sqlite;
 using Microsoft.Extensions.Configuration;
+using Microsoft.Extensions.DependencyInjection;
+using Tangle.Core;
+using Tangle.Data;
+using System.Text.Json.Nodes;
 
 namespace Tangle.Web.Tests;
 
@@ -93,5 +97,27 @@ public sealed class HostTests(TangleFactory factory) : IClassFixture<TangleFacto
             owners = new[] { new { id = "example is:closed", kind = "org", watched = true } }, repos = Array.Empty<object>()
         })).StatusCode);
         Assert.Equal(HttpStatusCode.OK, (await client.GetAsync("/api/board")).StatusCode);
+    }
+
+    [Fact]
+    public async Task BoardAndDebugExposeFactsBatchesAndStrings()
+    {
+        using var isolated = new TangleFactory();
+        using var client = isolated.LocalClient();
+        client.DefaultRequestHeaders.Authorization = new("Bearer", TangleFactory.Key);
+        var store = isolated.Services.GetRequiredService<SyncStore>();
+        var prs = Enumerable.Range(1, 5).Select(n => new PullRequest(
+            $"fixture/repo#{n}", "fixture/repo", n, $"feat: scaffold applier for pp-{n}", n == 1 ? "#2" : "",
+            "viewer", true, "OPEN", false, $"feature-{n}", "main", "2026-10-01T00:00:00Z",
+            "2026-10-09T00:00:00Z", null, 10, 0, 1, "MERGEABLE", null, null, [], [], [
+                new($"thread-{n}", null, false, "reviewer", "2026-10-09T00:00:00Z", "fix")
+            ], [], $"hash-{n}", "viewer")).ToArray();
+        await store.SaveScopeAsync("involves:viewer org:fixture", prs, "2026-10-10T00:00:00Z", default);
+        var board = JsonNode.Parse(await client.GetStringAsync("/api/board"))!;
+        Assert.Equal(5, board["cards"]!.AsArray().Count);
+        Assert.Equal("me", board["cards"]![0]!["facts"]!["turn"]!.GetValue<string>());
+        Assert.Single(board["batches"]!.AsArray());
+        Assert.Single(board["strings"]!.AsArray());
+        Assert.Contains("1 open review comment", await client.GetStringAsync("/api/debug/prs"));
     }
 }
