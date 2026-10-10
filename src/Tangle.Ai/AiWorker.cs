@@ -62,7 +62,7 @@ public sealed class AiWorker(IAiStore store, HaikuDecider decider, ILiveEvents e
         var pairs = Candidates(snapshot);
         foreach (var batch in Batches(pairs))
         {
-            var hash = Hash("pairs", batch);
+            var hash = Hash("pairs", HaikuDecider.PairInput(batch));
             if (await store.CachedAsync(hash, ct)) continue;
             var current = await store.SnapshotAsync(ct);
             var currentRefs = current.Prs.Select(p => p.Ref).Concat(current.Stickies.Select(s => s.Ref)).ToHashSet();
@@ -92,9 +92,9 @@ public sealed class AiWorker(IAiStore store, HaikuDecider decider, ILiveEvents e
         var current = new List<PairContext>();
         foreach (var pair in pairs)
         {
-            HaikuDecider.SerializeInput(new[] { pair });
+            HaikuDecider.SerializeInput(HaikuDecider.PairInput(new[] { pair }));
             var candidate = current.Append(pair).ToArray();
-            var bytes = Encoding.UTF8.GetByteCount(JsonSerializer.Serialize(candidate, HaikuDecider.Json));
+            var bytes = Encoding.UTF8.GetByteCount(JsonSerializer.Serialize(HaikuDecider.PairInput(candidate), HaikuDecider.Json));
             if (current.Count > 0 && (candidate.Length > 20 || bytes > HaikuDecider.MaximumInputBytes))
             {
                 result.Add(current.ToArray());
