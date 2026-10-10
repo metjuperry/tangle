@@ -1,4 +1,11 @@
 import { test, expect } from '../../web/node_modules/@playwright/test'
+import { actionLabel, friendlyAiText } from '../../web/src/api/aiText'
+
+test('AI text translates known schema labels without rewriting user prose or unknown identifiers', () => {
+  expect(friendlyAiText('Check `behindBy`, idleDays and review_decision.')).toBe('Check commits behind base, days without human activity and review status.')
+  expect(friendlyAiText('The behindByAdapter module needs a review.')).toBe('The behindByAdapter module needs a review.')
+  expect(actionLabel('fix')).toBe('Fix')
+})
 
 test('call history explains work and links to the assessed PR', async ({ page }) => {
   await page.route('**/api/ai/status', route => route.fulfill({ json: { enabled: true, calls: [{
@@ -24,7 +31,7 @@ test('AI verdict and suggested string display as proposals, tie and cut stay hum
     const response = await route.fetch()
     const board = await response.json()
     board.cards.find((c: { number: number }) => c.number === 49).verdict = {
-      action: 'fix', confidence: .9, priority: 4, reason: 'Answer four unresolved review asks.', intent: 'Add a metadata checkpoint.',
+      action: 'fix', confidence: .9, priority: 4, reason: 'Check behindBy and answer four unresolved review asks.', intent: 'Add a metadata checkpoint.',
     }
     board.strings = [{ id: 'fixture-ai', aRef: 'pr:example/repo#49', bRef: 'pr:example/tools#195',
       source: 'ai', status: 'suggested', reason: 'Both add connector metadata.', label: null }]
@@ -35,7 +42,7 @@ test('AI verdict and suggested string display as proposals, tie and cut stay hum
   await page.getByLabel('Development key').fill('tangle-browser-test-key-not-a-secret')
   await page.getByRole('button', { name: 'Unlock Tangle' }).click()
   await page.getByRole('button', { name: /example\/repo #49,/ }).click()
-  await expect(page.getByText('Answer four unresolved review asks.')).toBeVisible()
+  await expect(page.getByText('Check commits behind base and answer four unresolved review asks.')).toBeVisible()
   await expect(page.getByText('AI proposal, not an action.')).toBeVisible()
   await page.locator('.yarn-tag').click()
   await expect(page.getByRole('heading', { name: 'Do these belong together?' })).toBeVisible()

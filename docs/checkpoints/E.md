@@ -51,6 +51,8 @@ Read next-step proposals on ten cards, compare reasons with their computed facts
 
 Pair outputs now use schema-constrained numeric indices rather than asking the model to copy PR/sticky references. Tangle maps each index to its exact input pair, accepts reordered results and rejects duplicate/missing answers. Existing cached successful results remain stored; the new pair prompt/input format has a new cache key. No paid retries are triggered by the implementing agent.
 
+Prompts now request brief, plain-language reasons and intent, without internal field names. Existing AI text is displayed with known schema terms translated (for example behindBy → commits behind base); raw saved answers and your own labels/notes are unchanged. Prompt edits change cache keys, so a later user-triggered sync may regenerate allowed-repo judgments under the normal budget.
+
 Pair requests are now packed by serialized UTF-8 payload size as well as the 20-pair maximum. Large repeated PR contexts are split into smaller requests instead of aborting the pass. This 60 KB per-request bound is separate from the monthly USD budget. Requests rejected before dispatch have zero usage; migration 0007 releases only reservations bearing the exact old pre-dispatch size error. Unknown network usage remains conservatively reserved.
 
 - The model and pricing were checked against current Anthropic documentation. Base pricing used is $0.10/M input tokens and $0.50/M output tokens; requests are bounded below the 100k-token tier.

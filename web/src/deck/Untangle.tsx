@@ -3,6 +3,7 @@ import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 import { AnimatePresence, motion, useReducedMotion } from 'motion/react'
 import { api, write, type Board } from '../api/client'
 import { ActionComposer, Receipt } from './Receipt'
+import { actionLabel, friendlyAiText } from '../api/aiText'
 
 export type Decision = { id: string; prId: string; choice: string; actionId: string | null }
 const choices = [['merge', 'Merge', 'M'], ['fix', 'Fix', 'F'], ['ping', 'Ping', 'P'], ['wait', 'Wait', 'W'], ['close', 'Close', 'X'], ['snooze', 'Snooze', 'S']]
@@ -46,7 +47,7 @@ export function Untangle({ board }: { board: Board }) {
     {decisions.error && <p role="alert">{decisions.error.message}</p>}
     <AnimatePresence mode="wait"><motion.div className="deck-paper" key={card?.id ?? 'done'} initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={exit} transition={{ duration: reduced ? .1 : .3 }}>
       {card ? <><span className="deck-ref">{card.id}</span><h2>{card.title}</h2><p>{card.facts?.turnReason}</p>
-        {card.verdict && <div className="fact-block"><p className="eyebrow">Suggested · {card.verdict.action}</p><p>{card.verdict.reason}</p></div>}
+        {card.verdict && <div className="fact-block"><p className="eyebrow">Suggested · {actionLabel(card.verdict.action)}</p><p>{friendlyAiText(card.verdict.reason)}</p></div>}
         <button onClick={() => { setPendingChoice('fix'); setComposer(true) }}>Queue a GitHub action</button><p className="quiet">Merge, Fix, Ping and Close open an exact-action editor. Wait and Snooze are local decisions. Nothing is sent yet.</p></> :
         <><h2>All {order.length} untangled</h2><p>Review your receipt before applying anything.</p><a href="/">Back to the board</a></>}
     </motion.div></AnimatePresence>

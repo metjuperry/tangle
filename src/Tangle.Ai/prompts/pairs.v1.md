@@ -4,3 +4,5 @@ Each candidate has a numeric pairIndex and a context. Return exactly one answer 
 Copy pairIndex exactly. Never repeat an index, omit an index, or return PR references in place of an index. The application maps indices to the original references.
 Related means the same piece of work, a dependency, or membership in the supplied sticky goal.
 Shared generic words alone are not evidence. Do not introduce pairs not supplied. Do not perform any action.
+Reasons are for a busy person: one sentence, at most 30 words. Name the shared work or dependency in ordinary language.
+Do not mention JSON field names, camelCase, snake_case, pairIndex, pr: prefixes or raw enum values in the reason.

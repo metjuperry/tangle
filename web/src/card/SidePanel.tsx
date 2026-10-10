@@ -7,6 +7,7 @@ import { useMutation, useQueryClient } from '@tanstack/react-query'
 import { write } from '../api/client'
 import { ActionComposer } from '../deck/Receipt'
 import { useState } from 'react'
+import { actionLabel, friendlyAiText } from '../api/aiText'
 
 export function SidePanel({ board }: { board: Board }) {
   const [queueAction, setQueueAction] = useState(false)
@@ -43,9 +44,9 @@ export function SidePanel({ board }: { board: Board }) {
         <p>{card.facts?.size} · {card.facts?.idleDays} idle days · {card.facts?.conflicting ? 'conflicts' : 'no known conflicts'}</p>
         <p className="quiet">Nothing will be posted to GitHub.</p></div>
       {card.verdict && <div className="fact-block"><p className="eyebrow">Suggested next step · {Math.round(card.verdict.confidence * 100)}% confidence</p>
-        <strong>{card.verdict.action}</strong><p>{card.verdict.reason}</p><p className="quiet">AI proposal, not an action.</p>
+        <strong>{actionLabel(card.verdict.action)}</strong><p>{friendlyAiText(card.verdict.reason)}</p><p className="quiet">AI proposal, not an action.</p>
         {card.verdict.createdAt && <p className="quiet">Generated {new Date(card.verdict.createdAt).toLocaleString()}; check against current facts.</p>}</div>}
-      {card.verdict?.intent && <><h3>Why it exists</h3><p>{card.verdict.intent}</p></>}
+      {card.verdict?.intent && <><h3>Why it exists</h3><p>{friendlyAiText(card.verdict.intent)}</p></>}
       {context.isPending && <p role="status">Loading the card back…</p>}
       {context.error && <p role="alert">{context.error.message}</p>}
       {context.data && <>
@@ -54,7 +55,7 @@ export function SidePanel({ board }: { board: Board }) {
         {context.data.threads.map(t => <div className="review-ask" key={t.id}><span className="ask-square" /><div><small>{t.lastActor ?? 'unknown'} · {t.lastAt ? new Date(t.lastAt).toLocaleDateString() : 'unknown date'}</small><p>{t.excerpt}</p></div></div>)}
         <h3>On the same string</h3>{context.data.strings.length === 0 && <p className="quiet">No strings yet.</p>}
         {context.data.strings.map(s => { const ref = s.aRef === `pr:${card.id}` ? s.bRef : s.aRef
-          return <button className="related-card" key={s.id} onClick={() => select(ref.startsWith('sticky:') ? ref : ref.slice(3))}><b>{ref.replace(/^pr:/, '')}</b><span>{s.label ?? s.reason}</span></button> })}
+          return <button className="related-card" key={s.id} onClick={() => select(ref.startsWith('sticky:') ? ref : ref.slice(3))}><b>{ref.replace(/^pr:/, '')}</b><span>{s.label ?? (s.reason && s.source === 'ai' ? friendlyAiText(s.reason) : s.reason)}</span></button> })}
         {card.batchId && <><h3>In this batch</h3>{board.cards.filter(p => p.batchId === card.batchId).map(p => <button className="related-card" key={p.id} onClick={() => select(p.id)}>{p.id} · {p.title}</button>)}</>}
         <h3>Recent activity</h3>{context.data.events.slice(0, 8).map((e, i) => <p className="activity" key={i}>{e.actorDisplay ?? e.actor ?? 'Author unavailable'} · {e.kind} · {new Date(e.at).toLocaleDateString()}</p>)}
       </>}
