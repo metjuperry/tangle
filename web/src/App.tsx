@@ -38,7 +38,7 @@ function SettingsPage() {
   })
   if (settings.error) return <p role="alert">{settings.error.message}</p>
   if (!value) return <p>Loading settings…</p>
-  return <section className="settings-page"><div className="settings-heading"><h1>Settings</h1><p>Choose what goes on your board and what may leave your laptop.</p></div>
+  return <section className="settings-page"><div className="settings-content"><div className="settings-heading"><h1>Settings</h1><p>Choose what goes on your board and what may leave your laptop.</p></div>
     <section className="settings-section" aria-labelledby="owners-heading"><h2 id="owners-heading">Watched owners</h2>
     <p>Organizations and personal accounts to search for PRs involving you. Disabling an owner pauses all its repos.</p>
     {value.owners.length === 0 && <p className="quiet">No owners added yet.</p>}
@@ -78,7 +78,10 @@ function SettingsPage() {
       <p>{applyPolicy.data?.enabled ? `Apply is restricted to sandbox: ${applyPolicy.data.sandboxRepo ?? 'none configured'}.` : 'Apply is disabled. Queuing actions never posts them.'}</p>
       <p className="quiet">Set Apply:SandboxRepo and Apply:Enabled in Host user-secrets only after authorizing sandbox tests. Each action still needs its own confirmation.</p>
       {applyPolicy.error && <p role="alert">{applyPolicy.error.message}</p>}</section>
-    <section className="settings-section" aria-labelledby="calls-heading"><h2 id="calls-heading">Recent AI calls</h2>{aiStatus.error && <p role="alert">{aiStatus.error.message}</p>}
+    <section className="settings-section" aria-label="AI call history">
+    {aiStatus.error && <p role="alert">{aiStatus.error.message}</p>}
+    <details className="ai-history"><summary>Recent AI calls <span>{aiStatus.data ? `(${aiStatus.data.calls.length})` : '(loading…)'}</span></summary>
+    <p className="quiet">Request details and costs. These do not change your settings.</p>
     {aiStatus.data?.calls.length === 0 && <p className="quiet">No provider calls recorded.</p>}
     {aiStatus.data?.calls.map((call, i) => <article className="ai-call-row" key={i}>
       <div className="ai-call-heading"><b>{call.job === 'verdict' ? 'PR next-step assessment' : call.job === 'pairs' ? 'Relationship assessment' : 'Earlier AI call'}</b><span>{call.status}</span></div>
@@ -86,7 +89,7 @@ function SettingsPage() {
       <p>{call.error ? `Failed: ${call.error}` : call.outcome ? friendlyAiText(call.outcome) : (call.status === 'reserved' ? 'Waiting for completion; usage may be unknown.' : 'Details were not recorded for this earlier call.')}</p>
       {call.targets && <details><summary>What was assessed</summary><ul>{(JSON.parse(call.targets) as string[]).map(target => <li key={target}>{target.replaceAll('pr:', '')}</li>)}</ul></details>}
       <small>{new Date(call.createdAt).toLocaleString()} · ${call.cost.toFixed(6)}{call.status === 'reserved' && ` · $${call.reservedCost.toFixed(2)} budget reserved`} · {call.inputTokens} input / {call.outputTokens} output tokens · {call.latencyMs} ms</small>
-    </article>)}</section>
+    </article>)}</details></section></div>
     <footer className="settings-save"><span>Changes apply only when you save.</span><button disabled={save.isPending} onClick={() => save.mutate(value)}>{save.isPending ? 'Saving…' : 'Save settings'}</button>
     {save.error && <p role="alert">{save.error.message}</p>}{save.isSuccess && <p role="status">Settings saved.</p>}</footer>
   </section>

@@ -18,6 +18,8 @@ Successful results are cached by model, prompt content and complete bounded inpu
 
 Settings is organized into bordered sections for owners, repository permissions, AI privacy/budget, bot detection and recent calls. Each repo has independently labelled Watch and Allow AI controls; the page has one save bar at the bottom. No permission is changed just by this layout update.
 
+The save bar now remains visible below an independently scrolling settings area. AI history is collapsed by default and shows its entry count; expanding long histories does not push saving off-screen. Keyboard-accessible disclosure and mobile layouts are supported.
+
 Call history now records the job, assessed PR/pairs, and outcome (verdict or number of new suggested strings). PR assessments link to their card. Forward migration 0005 recovers prior verdict outcomes where their input hash matches; older pair calls without stored targets remain explicitly unidentified rather than guessed. This improvement makes no provider calls.
 
 ```sh
