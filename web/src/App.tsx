@@ -73,7 +73,9 @@ function Workspace() {
     <nav className="view-switch"><a href="/" aria-current={path === '/' ? 'page' : undefined}>Board</a><span title="Arrives in M6">Untangle</span></nav>
     <div className="header-counts"><span><b>{mine}</b> yours</span><span><b>{others}</b> around you</span><span><b>{board.data?.strings.length ?? 0}</b> strings</span></div>
     <div className="header-spacer" /><span className="knot-meter">Untied 0 of {mine}<span aria-hidden="true" className="knots">{Array.from({ length: Math.min(mine, 20) }, (_, i) => <i key={i} />)}</span></span>
-    <button className="header-button" aria-pressed={dimOthers} onClick={toggleOthers}>{dimOthers ? 'Show others’ PRs' : 'Dim others’ PRs'}</button>
+    <button className="header-button" disabled={others === 0} aria-pressed={others > 0 && dimOthers} onClick={toggleOthers}
+      title={others === 0 ? 'Every PR on this board is authored by you.' : 'Fade cards authored by other people, not cards waiting on a reviewer.'}>
+      {others === 0 ? 'No others’ PRs to dim' : dimOthers ? 'Show others’ PRs' : 'Dim others’ PRs'}</button>
     <button className="header-button" disabled={sync.isPending} onClick={() => sync.mutate()}>{sync.isPending ? 'Syncing…' : 'Sync'}</button><a className="header-button" href="/settings">Settings</a></header>
     {(status || sync.error) && <div className={`notice ${sync.error ? 'notice-error' : ''}`} role={sync.error ? 'alert' : 'status'}>{sync.error?.message ?? status}</div>}
     {path === '/settings' ? <main className="settings-wrap"><SettingsPage /></main> :

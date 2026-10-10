@@ -66,3 +66,9 @@ See [DECISIONS](../DECISIONS.md) for reversible choices.
 Use the board on your real backlog for ten minutes. Can you tell what needs you within seconds? Are cards, zones, yarn and card-back text readable at your usual zoom? Decide visual changes against the prototype, including zone packing, card size, the default fit and batch representation.
 
 Approve checkpoint C before any editing features are added. **M4 has not started.**
+
+## Review fixes
+
+After Metju's feedback, the red check-mark tag was moved above the node layer so cards/zones cannot intercept its clicks. It now has a larger, centered target and an "Explain this connection" tooltip; the legend explains what to click.
+
+"Dim others' PRs" refers to **authorship**, not whose turn it is. If every PR belongs to you, the button now says "No others' PRs to dim" and is disabled. On mixed boards, other-authored cards fade to 30% while yours remain fully visible. Pointer/keyboard tag activation, actual opacity changes, and the all-mine state have browser regressions.

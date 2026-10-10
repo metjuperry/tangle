@@ -40,7 +40,8 @@ a { color: var(--yarn); }
 .stamp { position: absolute; bottom: 7px; right: 7px; transform: rotate(-7deg); border: 2px solid #5e564b; color: #5e564b; font-size: 9px; font-weight: 700; letter-spacing: .08em; padding: 1px 4px; border-radius: 3px; background: #fbf6ead9; }
 .turn-me .stamp { color: #c2410c; border-color: #c2410c; }
 .react-flow__handle { width: 1px; height: 1px; min-width: 1px; min-height: 1px; opacity: 0; top: 2px; }
-.yarn-tag { position: absolute; pointer-events: all; width: 24px; height: 24px; border: 2px solid var(--yarn); border-radius: 50%; color: var(--paper); background: var(--yarn); font-size: 13px; font-weight: 700; padding: 0; box-shadow: 0 2px 4px #28140059; }
+.react-flow__edgelabel-renderer { z-index: 30; }
+.yarn-tag { position: absolute; pointer-events: all; display: grid; place-items: center; width: 28px; height: 28px; border: 2px solid var(--yarn); border-radius: 50%; color: var(--paper); background: var(--yarn); font-size: 15px; line-height: 1; font-weight: 700; padding: 0; box-shadow: 0 2px 4px #28140059; }
 .board-legend { position: absolute; z-index: 25; left: 20px; bottom: 20px; right: 20px; width: fit-content; max-width: calc(100% - 40px); display: flex; flex-wrap: wrap; gap: 8px 18px; padding: 8px 14px; border-radius: 4px; background: #fbf6eaeb; box-shadow: 0 2px 4px #2814004d; font-size: 11px; color: #3b342b; pointer-events: none; }
 .board-legend span { display: flex; gap: 6px; align-items: center; }
 .legend-pin { width: 12px; height: 12px; border-radius: 50%; display: inline-block; }

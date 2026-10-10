@@ -53,6 +53,7 @@ function YarnEdge({ sourceX, sourceY, targetX, targetY, data }: EdgeProps<YarnLi
     <BaseEdge path={path} style={{ stroke: 'var(--yarn)', strokeWidth: 3, strokeLinecap: 'round' }} />
     <EdgeLabelRenderer><button className="yarn-tag nodrag nopan" style={{ transform: `translate(-50%, -50%) translate(${mx}px, ${my}px)` }}
       aria-label={`Rule string: ${data.yarn.aRef.slice(3)} and ${data.yarn.bRef.slice(3)}`}
+      title="Explain this connection"
       onClick={() => select(data.yarn.id)}>✓</button></EdgeLabelRenderer></>
 }
 const nodeTypes = { zone: ZoneNode, pr: PrCardNode, batch: PrCardNode }
@@ -106,6 +107,6 @@ export function BoardView({ board }: { board: Board }) {
       onNodeClick={(_, node) => { if (node.type !== 'zone') select((node.data as CardData).card.id) }}
       proOptions={{ hideAttribution: false }}><Controls showInteractive={false} /></ReactFlow></ReactFlowProvider>
     <div className="board-legend"><span><i className="legend-pin me" />your turn</span><span><i className="legend-pin them" />waiting on others</span>
-      <span><i className="legend-pin nobody" />nobody’s turn</span><span><i className="legend-yarn" />linked by a rule</span><span>yellowed paper = open over 40 days</span></div>
+      <span><i className="legend-pin nobody" />nobody’s turn</span><span><i className="legend-yarn" />rule link · click its ✓ to read why</span><span>yellowed paper = open over 40 days</span></div>
   </section>
 }
