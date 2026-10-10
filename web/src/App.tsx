@@ -11,6 +11,7 @@ import { friendlyAiText } from './api/aiText'
 import type { Decision } from './deck/Untangle'
 import type { Action } from './deck/Receipt'
 import { ViewLoading } from './theme/ViewLoading'
+import { activeDecisionIds } from './deck/progress'
 const Untangle = lazy(() => import('./deck/Untangle').then(module => ({ default: module.Untangle })))
 
 type Owner = { id: string; kind: 'org' | 'user'; watched: boolean }
@@ -163,10 +164,11 @@ function Workspace() {
   }, [board.data, path, mutate])
   const mine = board.data?.cards.filter(p => p.isMine).length ?? 0
   const others = (board.data?.cards.length ?? 0) - mine
+  const decidedCount = activeDecisionIds(board.data?.cards ?? [], decisions.data ?? []).size
   return <><header className="top-bar"><a className="brand" href="/" aria-label="Tangle board"><svg width="30" height="30" viewBox="0 0 30 30" fill="none" aria-hidden="true"><path d="M4 22C10 4 22 4 18 14S6 16 15 11 28 14 26 24" /></svg>tangle</a>
     <nav className="view-switch"><a href="/" aria-current={path === '/' ? 'page' : undefined}>Board</a><a href="/untangle" aria-current={path === '/untangle' ? 'page' : undefined}>Untangle</a></nav>
     <div className="header-counts"><span><b>{mine}</b> yours</span><span><b>{others}</b> around you</span><span><b>{board.data?.strings.length ?? 0}</b> strings</span></div>
-    <div className="header-spacer" /><span className="knot-meter">Untied {new Set(decisions.data?.map(d => d.prId)).size} of {mine}<span aria-hidden="true" className="knots">{Array.from({ length: Math.min(mine, 20) }, (_, i) => <i key={i} style={{ background: i < (decisions.data?.length ?? 0) ? 'var(--yarn)' : undefined }} />)}</span></span>
+    <div className="header-spacer" /><span className="knot-meter">Untied {decidedCount} of {mine}<span aria-hidden="true" className="knots">{Array.from({ length: Math.min(mine, 20) }, (_, i) => <i key={i} style={{ background: i < decidedCount ? 'var(--yarn)' : undefined }} />)}</span></span>
     <button className="header-button" disabled={others === 0} aria-pressed={others > 0 && dimOthers} onClick={toggleOthers}
       title={others === 0 ? 'Every PR on this board is authored by you.' : 'Fade cards authored by other people, not cards waiting on a reviewer.'}>
       {others === 0 ? 'No others’ PRs to dim' : dimOthers ? 'Show others’ PRs' : 'Dim others’ PRs'}</button>

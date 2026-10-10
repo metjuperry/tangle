@@ -1,5 +1,71 @@
 import { test, expect } from '../../web/node_modules/@playwright/test'
 import { actionResultLabel, actionResultUrl } from '../../web/src/deck/actionResult'
+import { activeDecisionIds } from '../../web/src/deck/progress'
+
+test('progress counts only distinct decisions for current own PRs', () => {
+  const cards = [{ id: 'open#1', isMine: true }, { id: 'other#1', isMine: false }]
+  const decisions = [{ prId: 'open#1' }, { prId: 'open#1' }, { prId: 'closed#2' }, { prId: 'merged#3' }, { prId: 'other#1' }]
+  expect([...activeDecisionIds(cards, decisions)]).toEqual(['open#1'])
+  expect(activeDecisionIds([], decisions).size).toBe(0)
+})
+test('tear saves the round, resets beads and makes open PRs available again', async ({ page }) => {
+  let decisionCount = 0
+  page.on('request', request => { if (request.url().endsWith('/api/decisions') && request.method() === 'POST') decisionCount++ })
+  await page.emulateMedia({ reducedMotion: 'reduce' })
+  await page.goto('/untangle')
+  await page.getByLabel('Development key').fill('tangle-browser-test-key-not-a-secret')
+  await page.getByRole('button', { name: 'Unlock Tangle' }).click()
+  await expect(page.getByRole('button', { name: 'Wait W', exact: true })).toBeEnabled()
+  const firstCard = await page.locator('.deck-ref').textContent()
+  await page.getByRole('button', { name: 'Wait W', exact: true }).click()
+  await expect.poll(() => decisionCount).toBe(1)
+  const receipt = page.getByRole('complementary', { name: 'Queued actions' })
+  await receipt.getByRole('button', { name: 'Tear and save', exact: true }).click()
+  await expect(page.getByRole('dialog')).toContainText('All open PRs return to Untangle')
+  await page.getByRole('dialog').getByRole('button', { name: 'Cancel', exact: true }).click()
+  await expect(page.locator('.knot-meter')).not.toContainText('Untied 0 of')
+  await receipt.getByRole('button', { name: 'Tear and save', exact: true }).click()
+  await page.getByRole('dialog').getByRole('button', { name: 'Tear and save', exact: true }).click()
+  await expect(page.locator('.knot-meter')).toContainText('Untied 0 of')
+  await expect(page.locator('.deck-ref')).toHaveText(firstCard!)
+  await expect(receipt.locator('.saved-receipts > summary')).toContainText('Saved receipts')
+  await page.reload()
+  await expect(page.locator('.knot-meter')).toContainText('Untied 0 of')
+  await expect(page.locator('.deck-ref')).toHaveText(firstCard!)
+})
+
+test('closed and merged PR decisions do not inflate meter or active receipt', async ({ page }) => {
+  await page.route('**/api/board', async route => {
+    const response = await route.fetch()
+    const board = await response.json()
+    board.cards = board.cards.filter((card: { id: string }) => card.id === 'example/repo#49')
+    board.strings = []
+    await route.fulfill({ json: board })
+  })
+  await page.route('**/api/decisions', route => route.fulfill({ json: [
+    { id: 'one', prId: 'example/repo#49', choice: 'fix', actionId: null },
+    { id: 'two', prId: 'example/repo#2', choice: 'close', actionId: 'closed' },
+    { id: 'three', prId: 'example/repo#3', choice: 'merge', actionId: 'merged' },
+  ] }))
+  await page.route('**/api/actions', route => route.fulfill({ json: [
+    { id: 'closed', prId: 'example/repo#2', kind: 'close', payload: '{}', status: 'applied', result: '{}' },
+    { id: 'merged', prId: 'example/repo#3', kind: 'merge', payload: '{}', status: 'applied', result: '{}' },
+    { id: 'failed', prId: 'example/repo#49', kind: 'comment', payload: '{}', status: 'failed', result: 'Check GitHub before retrying.' },
+  ] }))
+  await page.goto('/untangle')
+  await page.getByLabel('Development key').fill('tangle-browser-test-key-not-a-secret')
+  await page.getByRole('button', { name: 'Unlock Tangle' }).click()
+  await expect(page.locator('.knot-meter')).toContainText('Untied 1 of 1')
+  await expect(page.locator('.deck-progress')).toContainText('1 of 1 decided')
+  await expect(page.getByRole('heading', { name: 'All 1 untangled' })).toBeVisible()
+  const receipt = page.getByRole('complementary', { name: 'Queued actions' })
+  await expect(receipt).toContainText('No queued actions.')
+  await expect(receipt.getByText('PR merged', { exact: true })).not.toBeVisible()
+  await expect(receipt.getByText('PR closed', { exact: true })).not.toBeVisible()
+  await expect(receipt.getByText('Action failed or outcome uncertain')).toBeVisible()
+  await receipt.locator('.receipt-history:not(.saved-receipts) > summary').click()
+  await expect(receipt.getByText('PR merged', { exact: true })).toBeVisible()
+})
 
 test('receipt result summaries preserve action meaning and safe GitHub links', () => {
   const pr = 'metjuperry/tangle-sandbox#1'
@@ -25,6 +91,7 @@ test('applied comment shows a friendly receipt and direct comment link', async (
   await page.getByLabel('Development key').fill('tangle-browser-test-key-not-a-secret')
   await page.getByRole('button', { name: 'Unlock Tangle' }).click()
   const receipt = page.getByRole('complementary', { name: 'Queued actions' })
+  await receipt.locator('.receipt-history:not(.saved-receipts) > summary').click()
   await expect(receipt.getByText('Comment posted', { exact: true })).toBeVisible()
   await expect(receipt.getByRole('link', { name: 'View on GitHub' })).toHaveAttribute('href', url)
   await expect(receipt).not.toContainText('addComment')

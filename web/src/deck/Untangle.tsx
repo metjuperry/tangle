@@ -5,6 +5,7 @@ import { api, write, type Board } from '../api/client'
 import { ActionComposer, Receipt } from './Receipt'
 import { actionLabel, friendlyAiText } from '../api/aiText'
 import { FixOptions } from './FixOptions'
+import { activeDecisionIds } from './progress'
 
 export type Decision = { id: string; prId: string; choice: string; actionId: string | null }
 const choices = [['merge', 'Merge', 'M'], ['fix', 'Fix', 'F'], ['ping', 'Ping', 'P'], ['wait', 'Wait', 'W'], ['close', 'Close', 'X'], ['snooze', 'Snooze', 'S']]
@@ -16,7 +17,7 @@ export function Untangle({ board }: { board: Board }) {
   const [pendingChoice, setPendingChoice] = useState('fix')
   const [exitChoice, setExitChoice] = useState('')
   const reduced = useReducedMotion()
-  const decided = new Set(decisions.data?.map(d => d.prId))
+  const decided = activeDecisionIds(board.cards, decisions.data ?? [])
   const order = board.cards.filter(p => p.isMine).sort((a, b) => {
     const rank = (turn?: string) => turn === 'me' ? 0 : turn === 'nobody' ? 1 : 2
     return rank(a.facts?.turn) - rank(b.facts?.turn) ||
@@ -46,7 +47,7 @@ export function Untangle({ board }: { board: Board }) {
   const exit = reduced ? { opacity: 0 } : { opacity: 0, x: exitChoice === 'merge' ? 600 : exitChoice === 'close' ? -600 : 0,
     y: exitChoice === 'snooze' ? 500 : exitChoice === 'merge' || exitChoice === 'close' ? 0 : -500 }
   return <main className="untangle-workspace"><section className="deck" aria-label="Untangle deck">
-    <p className="deck-progress">{decisions.data?.length ?? 0} of {order.length} decided · your turn first, then the dustiest</p>
+    <p className="deck-progress">{decided.size} of {order.length} decided · your turn first, then the dustiest</p>
     {decisions.error && <p role="alert">{decisions.error.message}</p>}
     <AnimatePresence mode="wait"><motion.div className="deck-paper" key={card?.id ?? 'done'} initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={exit} transition={{ duration: reduced ? .1 : .3 }}>
       {card ? <><span className="deck-ref">{card.id}</span><h2>{card.title}</h2><p>{card.facts?.turnReason}</p>

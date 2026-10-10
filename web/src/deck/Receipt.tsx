@@ -2,8 +2,18 @@ import { useEffect, useRef, useState } from 'react'
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 import { api, write } from '../api/client'
 import { actionResultLabel, actionResultUrl } from './actionResult'
+import type { Decision } from './Untangle'
+import { useReducedMotion } from 'motion/react'
 
 export type Action = { id: string; prId: string; kind: string; payload: string; status: string; result: string | null }
+type SavedRound = { id: string; createdAt: string; actions: Action[]; decisions: Decision[] }
+function ActionResult({ action }: { action: Action }) {
+  return <div className={`receipt-item receipt-result ${action.status === 'failed' ? 'receipt-failed' : ''}`}>
+    <b>{actionResultLabel(action.kind, action.status)}</b><span>{action.prId}</span>
+    {action.status === 'failed' && <p>{action.result ?? 'No result recorded. Check GitHub before retrying.'}</p>}
+    <a href={actionResultUrl(action.prId, action.kind, action.result)} target="_blank" rel="noreferrer">View on GitHub</a>
+  </div>
+}
 export function ActionComposer({ prId, onClose, onQueued, initialKind = 'comment', onLocalDecision }: { prId: string; onClose: () => void; onQueued?: (id: string) => void; initialKind?: string; onLocalDecision?: () => void }) {
   const [kind, setKind] = useState(initialKind)
   const [text, setText] = useState('')
@@ -45,17 +55,45 @@ function Confirmation({ action, onClose }: { action: Action; onClose: () => void
     <button disabled={apply.isPending} onClick={() => apply.mutate()}>Confirm and apply</button><button disabled={apply.isPending} onClick={onClose}>Cancel</button>
     {apply.error && <p role="alert">{apply.error.message}</p>}</dialog>
 }
+function TearConfirmation({ onClose, onSaved }: { onClose: () => void; onSaved: () => void }) {
+  const dialog = useRef<HTMLDialogElement>(null)
+  useEffect(() => { dialog.current?.showModal() }, [])
+  const save = useMutation({ mutationFn: () => write('/api/receipts/tear', 'POST', { confirmed: true }),
+    onSuccess: () => { onSaved(); onClose() } })
+  return <dialog ref={dialog} className="new-sticky-dialog" aria-labelledby="tear-heading"
+    onCancel={event => { if (save.isPending) event.preventDefault(); else onClose() }}>
+    <h2 id="tear-heading">Tear and save this round?</h2>
+    <p>Applied actions and your decisions go into receipt history. All open PRs return to Untangle and the beads reset.</p>
+    <p>Queued actions, failed attempts, notes, strings and AI assessments stay unchanged. Nothing is posted to GitHub.</p>
+    <button disabled={save.isPending} onClick={() => save.mutate()}>Tear and save</button>
+    <button disabled={save.isPending} onClick={onClose}>Cancel</button>
+    {save.error && <p role="alert">{save.error.message}</p>}
+  </dialog>
+}
 export function Receipt() {
   const actions = useQuery({ queryKey: ['actions'], queryFn: () => api<Action[]>('/api/actions') })
   const policy = useQuery({ queryKey: ['apply-policy'], queryFn: () => api<{ enabled: boolean; sandboxRepo: string | null }>('/api/actions/policy') })
   const [confirm, setConfirm] = useState<Action | null>(null)
+  const decisions = useQuery({ queryKey: ['decisions'], queryFn: () => api<Decision[]>('/api/decisions') })
+  const history = useQuery({ queryKey: ['receipt-history'], queryFn: () => api<SavedRound[]>('/api/receipts/history') })
+  const [tearConfirm, setTearConfirm] = useState(false)
+  const [tearing, setTearing] = useState(false)
+  const reducedMotion = useReducedMotion()
   const client = useQueryClient()
   const remove = useMutation({ mutationFn: (id: string) => api(`/api/actions/${id}`, { method: 'DELETE' }),
     onSuccess: () => client.invalidateQueries({ queryKey: ['actions'] }) })
   const queued = actions.data?.filter(a => a.status === 'queued') ?? []
-  return <aside className="receipt" aria-label="Queued actions"><h2>TANGLE APPLY</h2><p>queued, nothing sent yet</p>
+  const completed = actions.data?.filter(a => a.status === 'applied') ?? []
+  const refreshRound = () => {
+    void client.invalidateQueries({ queryKey: ['actions'] })
+    void client.invalidateQueries({ queryKey: ['decisions'] })
+    void client.invalidateQueries({ queryKey: ['receipt-history'] })
+  }
+  return <><aside className={`receipt ${tearing ? 'receipt-tearing' : ''}`} aria-label="Queued actions"
+    onAnimationEnd={event => { if (event.target === event.currentTarget) { setTearing(false); refreshRound() } }}>
+    <h2>TANGLE APPLY</h2><p>queued, nothing sent yet</p>
     {actions.error && <p role="alert">{actions.error.message}</p>}{policy.error && <p role="alert">{policy.error.message}</p>}
-    {queued.length === 0 && <p>Decisions land here.</p>}
+    {queued.length === 0 && <p>No queued actions.</p>}
     {queued.map(a => <div className="receipt-item" key={a.id}><b>{a.kind} · {a.prId}</b><span className="receipt-payload">{(() => {
       const p: { Text?: string; Reviewer?: string; HeadSha?: string } = JSON.parse(a.payload)
       return a.kind === 'merge' ? 'Merge captured PR version' : p.Text ?? p.Reviewer ?? 'Close without comment'
@@ -64,11 +102,22 @@ export function Receipt() {
       <button disabled={!policy.data?.enabled || a.prId.split('#')[0] !== policy.data.sandboxRepo} onClick={() => setConfirm(a)}>Apply</button>
     </div>)}<p className="receipt-total">TOTAL <b>{queued.length}</b></p>
     <p>{policy.data?.enabled ? `Apply restricted to ${policy.data.sandboxRepo ?? 'no sandbox'}.` : 'Apply disabled. Configure a sandbox first.'}</p>
-    {actions.data?.filter(a => a.status !== 'queued' && a.status !== 'dismissed').map(a => <div className={`receipt-item receipt-result ${a.status === 'failed' ? 'receipt-failed' : ''}`} key={a.id}>
-      <b>{actionResultLabel(a.kind, a.status)}</b><span>{a.prId}</span>
-      {a.status === 'failed' && <p>{a.result ?? 'No result recorded. Check GitHub before retrying.'}</p>}
-      <a href={actionResultUrl(a.prId, a.kind, a.result)} target="_blank" rel="noreferrer">View on GitHub</a>
-    </div>)}
+    {actions.data?.filter(a => a.status !== 'queued' && a.status !== 'dismissed' && a.status !== 'applied')
+      .map(a => <ActionResult action={a} key={a.id} />)}
+    {completed.length > 0 && <details className="receipt-history"><summary>Completed actions ({completed.length})</summary>
+      {completed.map(a => <ActionResult action={a} key={a.id} />)}</details>}
+    <button className="tear-button" disabled={tearing || (!completed.length && !decisions.data?.length) || actions.data?.some(a => a.status === 'applying')}
+      onClick={() => setTearConfirm(true)}>Tear and save</button>
+    {decisions.error && <p role="alert">{decisions.error.message}</p>}
+    {history.error && <p role="alert">{history.error.message}</p>}
+    {(history.data?.length ?? 0) > 0 && <details className="receipt-history saved-receipts"><summary>Saved receipts ({history.data!.length})</summary>
+      {history.data?.map(round => <details className="saved-round" key={round.id}>
+        <summary>{new Date(round.createdAt).toLocaleString()} · {round.actions.length} applied, {round.decisions.length} decisions</summary>
+        {round.actions.map(a => <ActionResult action={a} key={a.id} />)}
+        {round.decisions.map(d => <p key={d.id}>{d.prId} · {d.choice === 'fix' && !d.actionId ? 'Still my turn' : d.choice}</p>)}
+      </details>)}</details>}
     {remove.error && <p role="alert">{remove.error.message}</p>}
     {confirm && <Confirmation action={confirm} onClose={() => setConfirm(null)} />}</aside>
+    {tearConfirm && <TearConfirmation onClose={() => setTearConfirm(false)}
+      onSaved={() => { if (reducedMotion) refreshRound(); else setTearing(true) }} />}</>
 }

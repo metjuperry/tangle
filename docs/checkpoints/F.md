@@ -1,6 +1,6 @@
 # Checkpoint F — Untangle, receipt and confirmed Apply
 
-2026-10-10. **Stop here: live sandbox Apply remains blocked, and M7 requires approval.**
+2026-10-10. **Stop here: Metju has verified sandbox comment, close and merge. M7 still requires checkpoint F approval.**
 
 ## Built
 
@@ -46,13 +46,17 @@ Restart the host. Your GitHub credential needs the relevant write permissions fo
 
 ## Verification and gaps
 
-Metju manually confirmed comment #1: cancelling sent nothing, and confirming created the comment successfully. The sandbox restriction was visible. Applied results now use concise labels (Comment posted, Review requested, PR closed/merged) and a View on GitHub link rather than raw mutation JSON; failed/uncertain results keep their explicit error. Raw responses remain stored for diagnosis. Close/merge sandbox verification is still outstanding.
+Metju manually confirmed comment #1: cancelling sent nothing, and confirming created the comment successfully. The sandbox restriction was visible. Applied results now use concise labels (Comment posted, Review requested, PR closed/merged) and a View on GitHub link rather than raw mutation JSON; failed/uncertain results keep their explicit error. Raw responses remain stored for diagnosis.
+
+Metju subsequently confirmed the sandbox close and merge succeeded and Sync removed both PRs from the board. Post-sync progress now counts only distinct decisions for current own open PRs, avoiding ratios such as 3 of 1. Applied actions remain saved in a collapsed Completed actions receipt history; failed/in-flight attempts remain visible. The active receipt total counts queued actions only.
+
+**Tear and save** closes a triage round: applied actions and all current decisions are atomically assigned to a saved receipt, without deleting them. Current beads reset and every still-open PR returns to Untangle. Pending queued actions and failed attempts remain visible; an in-flight Apply blocks tearing. Saved receipts are expandable history with action results and decisions. Notes, strings, positions, GitHub cache and AI-look state are untouched, so starting a fresh round does not cause paid AI rechecks.
 
 Published as [PR #7](https://github.com/metjuperry/tangle/pull/7), based on M5 and left unmerged. Offline validation passed 83 .NET tests and 22 browser tests. GitHub reports no workflow runs for this branch, so remote CI remains unverified.
 
 Offline API tests prove explicit confirmation, disabled Apply, exactly-once claiming, undo removing queued actions, and GitHub ownership/head-SHA guards. Browser tests cover a full deck with undo, exact receipt text, cancellation versus confirmation, and reduced-motion rendering. Fake HTTP handlers substitute for every GitHub mutation; no paid AI calls are required.
 
-**Live sandbox end-to-end testing has not occurred** because no sandbox/action authorization has been supplied. Remote CI is not claimed green until GitHub registers and completes a run.
+**Metju completed live sandbox comment, close and merge tests.** The implementing agent performed no Apply mutations. Request-review testing has not been authorized or reported. Remote CI is not claimed green until GitHub registers and completes a run.
 
 ## Decisions/deviations
 

@@ -61,6 +61,47 @@ public sealed class ActionTests
         Assert.Equal(1, github.Applied); // Queueing inspects but never mutates.
     }
     [Fact]
+    public async Task TearArchivesAppliedActionsAndDecisionsButPreservesQueuedAndFailedItems()
+    {
+        using var factory = new TangleFactory();
+        using var client = factory.LocalClient();
+        client.DefaultRequestHeaders.Authorization = new("Bearer", TangleFactory.Key);
+        var store = factory.Services.GetRequiredService<ActionStore>();
+        await Seed(store, factory.Services.GetRequiredService<SyncStore>());
+        var applied = await store.QueueAsync("fixture/sandbox#1", "comment", "{}", default);
+        await store.DecideAsync(applied.PrId, "fix", applied.Id, default);
+        await store.ClaimAsync(applied.Id, default);
+        await store.FinishAsync(applied.Id, true, "success", default);
+        var queued = await store.QueueAsync(applied.PrId, "comment", "{}", default);
+        var failed = await store.QueueAsync(applied.PrId, "comment", "{}", default);
+        await store.ClaimAsync(failed.Id, default);
+        await store.FinishAsync(failed.Id, false, "unknown", default);
+        Assert.Equal(HttpStatusCode.BadRequest, (await client.PostAsJsonAsync("/api/receipts/tear", new { confirmed = false })).StatusCode);
+        Assert.Single(await store.DecisionsAsync(default));
+        Assert.Equal(HttpStatusCode.OK, (await client.PostAsJsonAsync("/api/receipts/tear", new { confirmed = true })).StatusCode);
+        Assert.Empty(await store.DecisionsAsync(default));
+        Assert.Equal(new[] { queued.Id, failed.Id }.Order(), (await store.ListAsync(default)).Select(a => a.Id).Order());
+        var round = Assert.Single(await store.HistoryAsync(default));
+        Assert.Equal(applied.Id, Assert.Single(round.Actions).Id);
+        Assert.Single(round.Decisions);
+        Assert.Equal("applied", (await store.GetAsync(applied.Id, default))!.Status);
+        await store.DecideAsync(applied.PrId, "wait", null, default);
+        Assert.Single(await store.DecisionsAsync(default));
+        Assert.Single(await factory.Services.GetRequiredService<SyncStore>().GetBoardAsync());
+    }
+    [Fact]
+    public async Task TearCannotArchiveAnApplyingAction()
+    {
+        using var factory = new TangleFactory();
+        using var client = factory.LocalClient();
+        var store = factory.Services.GetRequiredService<ActionStore>();
+        await Seed(store, factory.Services.GetRequiredService<SyncStore>());
+        var action = await store.QueueAsync("fixture/sandbox#1", "comment", "{}", default);
+        await store.ClaimAsync(action.Id, default);
+        await Assert.ThrowsAsync<InvalidOperationException>(() => store.TearAsync(default));
+        Assert.Empty(await store.HistoryAsync(default));
+    }
+    [Fact]
     public async Task DisabledApplyNeverCallsGitHub()
     {
         using var factory = new TangleFactory();

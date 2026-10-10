@@ -12,7 +12,7 @@ public sealed class ActionStore(Database database, TimeProvider clock)
     public async Task<IReadOnlyList<QueuedAction>> ListAsync(CancellationToken ct)
     {
         await using var db = await database.OpenAsync(ct);
-        return (await db.QueryAsync<QueuedAction>(new CommandDefinition(Select + " ORDER BY created_at,id", cancellationToken: ct))).ToArray();
+        return (await db.QueryAsync<QueuedAction>(new CommandDefinition(Select + " WHERE receipt_round_id IS NULL ORDER BY created_at,id", cancellationToken: ct))).ToArray();
     }
     public async Task<QueuedAction?> GetAsync(string id, CancellationToken ct)
     {
@@ -26,7 +26,8 @@ public sealed class ActionStore(Database database, TimeProvider clock)
             new { prId }, cancellationToken: ct)) != 1) throw new ArgumentException("PR must be cached and open.");
         var action = new QueuedAction(Guid.NewGuid().ToString(), prId, kind, payload, "queued", clock.GetUtcNow().ToString("O"), null, null);
         await db.ExecuteAsync(new CommandDefinition("""
-            INSERT INTO action VALUES(@Id,@PrId,@Kind,@Payload,@Status,@CreatedAt,@AppliedAt,@Result)
+            INSERT INTO action(id,pr_id,kind,payload,status,created_at,applied_at,result)
+            VALUES(@Id,@PrId,@Kind,@Payload,@Status,@CreatedAt,@AppliedAt,@Result)
             """, action, cancellationToken: ct));
         return action;
     }
@@ -53,7 +54,7 @@ public sealed class ActionStore(Database database, TimeProvider clock)
         await using var db = await database.OpenAsync(ct);
         return (await db.QueryAsync<DeckDecision>(new CommandDefinition("""
             SELECT id AS Id,pr_id AS PrId,choice AS Choice,action_id AS ActionId,created_at AS CreatedAt
-            FROM decision ORDER BY created_at,id
+            FROM decision WHERE receipt_round_id IS NULL ORDER BY created_at,id
             """, cancellationToken: ct))).ToArray();
     }
     public async Task<DeckDecision> DecideAsync(string prId, string choice, string? actionId, CancellationToken ct)
@@ -78,7 +79,7 @@ public sealed class ActionStore(Database database, TimeProvider clock)
         using var tx = db.BeginTransaction(deferred: false);
         var latest = await db.QuerySingleOrDefaultAsync<DeckDecision>(new CommandDefinition("""
             SELECT id AS Id,pr_id AS PrId,choice AS Choice,action_id AS ActionId,created_at AS CreatedAt
-            FROM decision ORDER BY created_at DESC,rowid DESC LIMIT 1
+            FROM decision WHERE receipt_round_id IS NULL ORDER BY created_at DESC,rowid DESC LIMIT 1
             """, transaction: tx, cancellationToken: ct));
         if (latest is null) throw new InvalidOperationException("No decision to undo.");
         if (latest.ActionId is not null)
@@ -90,4 +91,48 @@ public sealed class ActionStore(Database database, TimeProvider clock)
         await db.ExecuteAsync(new CommandDefinition("DELETE FROM decision WHERE id=@Id", latest, tx, cancellationToken: ct));
         tx.Commit();
     }
+    public async Task<string> TearAsync(CancellationToken ct)
+    {
+        await using var db = await database.OpenAsync(ct);
+        using var tx = db.BeginTransaction(deferred: false);
+        if (await db.ExecuteScalarAsync<int>(new CommandDefinition(
+            "SELECT COUNT(*) FROM action WHERE status='applying'", transaction: tx, cancellationToken: ct)) > 0)
+            throw new InvalidOperationException("Wait for the current Apply attempt to finish before tearing the receipt.");
+        var count = await db.ExecuteScalarAsync<int>(new CommandDefinition("""
+            SELECT (SELECT COUNT(*) FROM action WHERE status='applied' AND receipt_round_id IS NULL)
+              + (SELECT COUNT(*) FROM decision WHERE receipt_round_id IS NULL)
+            """, transaction: tx, cancellationToken: ct));
+        if (count == 0) throw new InvalidOperationException("No applied actions or decisions to save yet.");
+        var id = Guid.NewGuid().ToString();
+        await db.ExecuteAsync(new CommandDefinition("INSERT INTO receipt_round VALUES(@id,@at)",
+            new { id, at = clock.GetUtcNow().ToString("O") }, tx, cancellationToken: ct));
+        await db.ExecuteAsync(new CommandDefinition("""
+            UPDATE action SET receipt_round_id=@id WHERE status='applied' AND receipt_round_id IS NULL;
+            UPDATE decision SET receipt_round_id=@id WHERE receipt_round_id IS NULL;
+            """, new { id }, tx, cancellationToken: ct));
+        tx.Commit();
+        return id;
+    }
+    public async Task<IReadOnlyList<ReceiptRound>> HistoryAsync(CancellationToken ct)
+    {
+        await using var db = await database.OpenAsync(ct);
+        using var tx = db.BeginTransaction();
+        var rounds = await db.QueryAsync<RoundRow>(new CommandDefinition(
+            "SELECT id AS Id,created_at AS CreatedAt FROM receipt_round ORDER BY created_at DESC,rowid DESC",
+            transaction: tx, cancellationToken: ct));
+        var history = new List<ReceiptRound>();
+        foreach (var round in rounds)
+        {
+            var actions = await db.QueryAsync<QueuedAction>(new CommandDefinition(Select + " WHERE receipt_round_id=@Id ORDER BY created_at,id",
+                round, tx, cancellationToken: ct));
+            var decisions = await db.QueryAsync<DeckDecision>(new CommandDefinition("""
+                SELECT id AS Id,pr_id AS PrId,choice AS Choice,action_id AS ActionId,created_at AS CreatedAt
+                FROM decision WHERE receipt_round_id=@Id ORDER BY created_at,id
+                """, round, tx, cancellationToken: ct));
+            history.Add(new(round.Id, round.CreatedAt, actions.ToArray(), decisions.ToArray()));
+        }
+        tx.Commit();
+        return history;
+    }
+    private sealed record RoundRow(string Id, string CreatedAt);
 }

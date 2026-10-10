@@ -16,3 +16,5 @@ public sealed record DeckDecision(string Id, string PrId, string Choice, string?
 {
     public DeckDecision() : this("", "", "", null, "") { }
 }
+public sealed record ReceiptRound(string Id, string CreatedAt, IReadOnlyList<QueuedAction> Actions,
+    IReadOnlyList<DeckDecision> Decisions);

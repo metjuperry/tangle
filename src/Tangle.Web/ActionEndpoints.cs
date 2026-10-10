@@ -23,6 +23,14 @@ public static class ActionEndpoints
             catch (InvalidOperationException e) { return Results.Conflict(new { error = e.Message }); }
         });
         api.MapGet("/actions", async (ActionStore store, CancellationToken ct) => Results.Ok(await store.ListAsync(ct)));
+        api.MapGet("/receipts/history", async (ActionStore store, CancellationToken ct) => Results.Ok(await store.HistoryAsync(ct)));
+        api.MapPost("/receipts/tear", async (ConfirmInput input, ActionStore store, EventHub events, CancellationToken ct) =>
+        {
+            if (!input.Confirmed) throw new ArgumentException("Confirm saving this round and resetting its decisions.");
+            var roundId = await store.TearAsync(ct);
+            events.Publish("receipt.saved", new { roundId });
+            return Results.Ok(new { roundId });
+        });
         api.MapPost("/actions", async (QueueInput input, ActionStore store, SyncStore sync, IGitHubActions github,
             EventHub events, ILogger<ActionStore> logger, CancellationToken ct) =>
         {

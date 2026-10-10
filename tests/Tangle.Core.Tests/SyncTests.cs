@@ -61,7 +61,8 @@ public sealed class SyncTests : IDisposable
             INSERT INTO link VALUES('tie','pr:example/repo#1','pr:example/repo#2','me',NULL,'tied',NULL,NULL,'release','now','now');
             INSERT INTO note VALUES('note','pr:example/repo#1','keep this','now');
             INSERT INTO position VALUES('pr:example/repo#1',42,99,1);
-            INSERT INTO action VALUES('action','example/repo#1','comment','hello','queued','now',NULL,NULL);
+            INSERT INTO action(id,pr_id,kind,payload,status,created_at,applied_at,result)
+              VALUES('action','example/repo#1','comment','hello','queued','now',NULL,NULL);
             """);
         Assert.Equal(0, (await sync.RunAsync(default)).Changed);
         Assert.Equal(2, await db.ExecuteScalarAsync<int>("SELECT COUNT(*) FROM link"));
