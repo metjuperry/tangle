@@ -25,9 +25,15 @@ test('fixture board renders cards, zones, batch and sagging strings', async ({ p
   await unlock(page)
   await expect(page.getByRole('region', { name: 'Yarn board' })).toBeVisible()
   await expect(page.locator('.repo-zone')).toHaveCount(4)
+  const zones = await page.locator('.react-flow__node-zone').evaluateAll(elements => elements.map(el => {
+    const transform = new DOMMatrix(getComputedStyle(el).transform)
+    return { x: transform.m41, y: transform.m42, width: el.getBoundingClientRect().width / transform.a }
+  }))
+  expect(new Set(zones.map(zone => zone.y)).size).toBe(1)
+  expect(zones.every((zone, i) => i === 0 || zone.x > zones[i - 1].x)).toBeTruthy()
   await expect(page.locator('.batch-card')).toHaveCount(1)
   await expect(page.locator('.batch-card')).toContainText('33 scaffold applier PRs')
-  await expect(page.locator('.yarn-tag')).toHaveCount(1)
+  await expect(page.getByRole('button', { name: 'Rule string: example/repo#49 and example/tools#195', exact: true })).toBeVisible()
   await expect(page.locator('.pr-card.aged').first()).toBeVisible()
   await expect(page.getByRole('link', { name: 'Debug PRs' })).toHaveCount(0)
 })

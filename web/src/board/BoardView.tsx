@@ -113,8 +113,9 @@ function layout(board: Board): { nodes: (Zone | PrNode | StickyNodeType)[]; edge
   const nodes: (Zone | PrNode | StickyNodeType)[] = []
   const mapped = new Map<string, string>()
   const repos = [...new Set(board.cards.map(p => p.repoId))].sort()
-  let x = 24, y = 36, rowHeight = 0
-  for (const [index, repo] of repos.entries()) {
+  let x = 24, rowHeight = 0
+  const y = 36
+  for (const repo of repos) {
     const cards = board.cards.filter(p => p.repoId === repo)
     const groups = new Map<string, Card[]>()
     const stacks = findStacks(cards).filter(stack => !stack.some(c => board.positions?.some(p => p.nodeRef === `pr:${c.id}`)))
@@ -134,7 +135,6 @@ function layout(board: Board): { nodes: (Zone | PrNode | StickyNodeType)[]; edge
     const rowHeights = Array.from({ length: Math.ceil(entries.length / columns) }, (_, row) =>
       Math.max(...entries.slice(row * columns, (row + 1) * columns).map(e => e.stack ? 92 + e.members.length * 142 : 136)))
     const height = Math.max(rowHeights.reduce((sum, h) => sum + h, 0) + 68, ...savedPositions.map(p => p.y + 136))
-    if (index > 0 && index % 2 === 0) { x = 24; y += rowHeight + 36; rowHeight = 0 }
     const zoneId = `zone:${repo}`
     nodes.push({ id: zoneId, type: 'zone', position: { x, y }, data: { title: repo.split('/')[1], mine: cards.filter(p => p.isMine).length, others: cards.filter(p => !p.isMine).length, width, height },
       style: { width, height }, selectable: false, draggable: false })
