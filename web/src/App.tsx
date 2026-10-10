@@ -10,6 +10,7 @@ import { NewSticky } from './card/AuthoringPanel'
 import type { Decision } from './deck/Untangle'
 import type { Action } from './deck/Receipt'
 import { ViewLoading } from './theme/ViewLoading'
+import { Brand } from './theme/Brand'
 import { activeDecisionIds } from './deck/progress'
 import { ReceiptHistory } from './deck/ReceiptHistory'
 import { PersonalKeys } from './settings/PersonalKeys'
@@ -178,7 +179,7 @@ function Workspace() {
   const mine = board.data?.cards.filter(p => p.isMine).length ?? 0
   const others = (board.data?.cards.length ?? 0) - mine
   const decidedCount = activeDecisionIds(board.data?.cards ?? [], decisions.data ?? []).size
-  return <><header className="top-bar"><a className="brand" href="/" aria-label="Tangle board"><svg width="30" height="30" viewBox="0 0 30 30" fill="none" aria-hidden="true"><path d="M4 22C10 4 22 4 18 14S6 16 15 11 28 14 26 24" /></svg>tangle</a>
+  return <><header className="top-bar"><a className="brand" href="/" aria-label="Tangle board"><Brand /></a>
     <nav className="view-switch"><a href="/" aria-current={path === '/' ? 'page' : undefined}>Board</a><a href="/untangle" aria-current={path === '/untangle' ? 'page' : undefined}>Untangle</a></nav>
     <div className="header-counts"><span><b>{mine}</b> yours</span><span><b>{others}</b> around you</span><span><b>{board.data?.strings.length ?? 0}</b> strings</span></div>
     <div className="header-spacer" /><span className="knot-meter">Untied {decidedCount} of {mine}<span aria-hidden="true" className="knots">{Array.from({ length: Math.min(mine, 20) }, (_, i) => <i key={i} style={{ background: i < decidedCount ? 'var(--yarn)' : undefined }} />)}</span></span>
@@ -230,7 +231,7 @@ function Shell() {
     } catch { setError('Unable to reach Tangle.') }
   }
   if (authenticated) return <Workspace />
-  return <><header className="top-bar"><strong className="brand">tangle</strong><span>Pull requests, untangled.</span></header>
+  return <><header className="top-bar"><strong className="brand"><Brand /></strong><span>Pull requests, untangled.</span></header>
     <main className="login-wrap"><section className="login-paper"><h1>Open your board</h1><form onSubmit={login}>
       <label>Development key<input type="password" value={key} onChange={e => setKey(e.target.value)} required autoComplete="current-password" /></label>
       <button>Unlock Tangle</button>

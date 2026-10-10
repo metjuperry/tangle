@@ -1,3 +1,5 @@
+<img src="docs/brand/tangle-mark.svg" width="64" height="64" alt="Tangle: two pins joined by knotted yarn">
+
 # Tangle
 
 A personal yarn board for triaging GitHub pull requests across repositories.

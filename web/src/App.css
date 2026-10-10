@@ -17,8 +17,8 @@ button { cursor: pointer; }
 button:disabled { cursor: default; opacity: .65; }
 a { color: var(--yarn); }
 .top-bar { display: flex; align-items: center; flex-wrap: wrap; gap: 12px 20px; padding: 12px 24px; background: var(--ink); color: var(--paper); flex-shrink: 0; }
-.brand { color: var(--paper); text-decoration: none; font-size: 26px; font-weight: 700; letter-spacing: -.04em; display: flex; gap: 10px; align-items: center; }
-.brand path { stroke: var(--pin-me); stroke-width: 2.4; stroke-linecap: round; }
+.brand { color: var(--paper); text-decoration: none; font-size: 24px; font-weight: 800; letter-spacing: -.02em; display: flex; gap: 10px; align-items: center; }
+.brand-mark { flex-shrink: 0; display: block; }
 .view-switch { border-radius: 30px; background: #3a3026; padding: 4px; display: flex; gap: 4px; font-size: 14px; }
 .view-switch a, .view-switch span { padding: 9px 16px; text-decoration: none; border-radius: 24px; color: #b5a998; }
 .view-switch a[aria-current] { background: var(--paper); color: var(--ink); font-weight: 700; }

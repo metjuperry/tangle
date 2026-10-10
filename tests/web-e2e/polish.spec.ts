@@ -1,6 +1,50 @@
 import { test, expect } from '../../web/node_modules/@playwright/test'
 import AxeBuilder from '../../web/node_modules/@axe-core/playwright'
 import { packLanes, stackSize } from '../../web/src/board/packing'
+import { readFile } from 'node:fs/promises'
+import { resolve } from 'node:path'
+
+test('supplied branding is served unchanged and used on login and board', async ({ page, request }) => {
+  const assets = ['tangle-mark.svg', 'tangle-mark-on-dark.svg', 'favicon.svg', 'favicon-16.png',
+    'favicon-32.png', 'apple-touch-icon.png', 'app-icon.svg', 'app-icon-512.png']
+  for (const asset of assets) {
+    const response = await request.get(`/${asset}`)
+    expect(response.ok()).toBeTruthy()
+    expect(await response.body()).toEqual(await readFile(resolve(__dirname, '../../docs/brand', asset)))
+  }
+  const response = await request.get('/site.webmanifest')
+  expect(response.ok()).toBeTruthy()
+  expect(response.headers()['content-type']).toContain('application/manifest+json')
+  const manifest = await response.json()
+  expect(manifest.name).toBe('Tangle')
+  expect(manifest.icons.map((icon: { src: string }) => icon.src)).toEqual(['/app-icon.svg', '/app-icon-512.png'])
+  await page.goto('/')
+  await expect(page.locator('link[rel="icon"]')).toHaveCount(3)
+  await expect(page.locator('link[rel="apple-touch-icon"]')).toHaveAttribute('href', '/apple-touch-icon.png')
+  await expect(page.locator('link[rel="manifest"]')).toHaveAttribute('href', '/site.webmanifest')
+  for (const signedIn of [false, true]) {
+    if (signedIn) {
+      await page.getByLabel('Development key').fill('tangle-browser-test-key-not-a-secret')
+      await page.getByRole('button', { name: 'Unlock Tangle' }).click()
+      await expect(page.getByRole('region', { name: 'Yarn board' })).toBeVisible()
+    }
+    const brand = page.locator('.brand')
+    await expect(brand).toHaveText('tangle')
+    await expect(brand).toHaveCSS('font-size', '24px')
+    await expect(brand).toHaveCSS('font-weight', '800')
+    await expect(brand).toHaveCSS('letter-spacing', '-0.48px')
+    await expect(brand).toHaveCSS('font-family', /Bricolage Grotesque/)
+    await expect(brand.locator('img')).toHaveAttribute('src', '/tangle-mark-on-dark.svg')
+    await expect(brand.locator('img')).toHaveAttribute('alt', '')
+    await expect(brand.locator('img')).toHaveCSS('width', '34px')
+    await expect(brand.locator('img')).toHaveCSS('height', '34px')
+    expect(await brand.locator('img').evaluate(img => (img as HTMLImageElement).naturalWidth)).toBeGreaterThan(0)
+    await page.evaluate(() => document.fonts.ready)
+    expect(await page.evaluate(() => [...document.fonts].some(face =>
+      face.family.includes('Bricolage Grotesque') && face.weight === '800' && face.status === 'loaded'))).toBeTruthy()
+  }
+  await expect(page.getByRole('link', { name: 'Tangle board', exact: true })).toBeVisible()
+})
 
 test('deterministic packing balances three lanes and long stacks stay three rows tall', () => {
   expect(stackSize(10)).toEqual({ width: 776, height: 538 })

@@ -9,6 +9,9 @@
 - Help and the generated [user guide](../user-guide.md) share
   `docs/features.json`. CI checks that documentation is synchronized.
 - README now describes the app, local setup, controls, safety, tests and links.
+- The supplied brand mark appears beside the live 800-weight wordmark in both
+  headers. Adaptive favicons, touch/home-screen icons and README branding use the
+  supplied assets; the manifest does not add offline caching.
 - Ctrl+K/Cmd+K search brings a matching PR into view. Cards become compact below
   60% zoom and zones summarize below 35%; clicking a summary zooms into its repo.
 - Keyboard tying through a labelled pin button and card back; directional arrows
@@ -33,6 +36,7 @@ Build `web/`, restart the host and open Help.
 4. Tab to a card and use arrow keys to move focus. Use its pin/button to enter
    keyboard tie mode.
 5. Compare README/user guide with the UI and identify any confusing language.
+6. Check the two-pin yarn mark on login, the board header and the browser tab.
 
 ## Validation and limitations
 
@@ -40,6 +44,9 @@ Published as [PR #10](https://github.com/metjuperry/tangle/pull/10), based on M8
 
 Browser tests cover search, summaries, keyboard focus, feature help and axe.
 The complete fixture suite also covers authoring, receipt, sessions and evaluation.
+After integrating the supplied brand assets, local validation passed all 100
+.NET tests and 45 browser tests, including exact served-asset comparisons,
+login/board wordmark typography and manifest metadata.
 No paid AI call or GitHub backlog action was performed for this milestone.
 
 All nodes remain mounted so off-screen cards can participate in keyboard
