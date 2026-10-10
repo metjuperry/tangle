@@ -44,6 +44,8 @@ Restart the host. Your GitHub credential needs the relevant write permissions fo
 
 ## Verification and gaps
 
+Published as [PR #7](https://github.com/metjuperry/tangle/pull/7), based on M5 and left unmerged. Offline validation passed 83 .NET tests and 22 browser tests. GitHub reports no workflow runs for this branch, so remote CI remains unverified.
+
 Offline API tests prove explicit confirmation, disabled Apply, exactly-once claiming, undo removing queued actions, and GitHub ownership/head-SHA guards. Browser tests cover a full deck with undo, exact receipt text, cancellation versus confirmation, and reduced-motion rendering. Fake HTTP handlers substitute for every GitHub mutation; no paid AI calls are required.
 
 **Live sandbox end-to-end testing has not occurred** because no sandbox/action authorization has been supplied. Remote CI is not claimed green until GitHub registers and completes a run.
