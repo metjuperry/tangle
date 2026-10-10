@@ -15,6 +15,9 @@
 - Settings shows one section at a time with a sidebar sitemap (a section picker
   on mobile). Section links survive refresh/back; drafts persist across sections
   and the fixed Save footer saves all setting changes together.
+- The locked screen uses the board's cork and pinned paper, a prominent light
+  logo, matching form styling, key guidance and inline errors. Unlocking shows
+  progress and blocks duplicate submission without changing authentication.
 - Ctrl+K/Cmd+K search brings a matching PR into view. Cards become compact below
   60% zoom and zones summarize below 35%; clicking a summary zooms into its repo.
 - Keyboard tying through a labelled pin button and card back; directional arrows

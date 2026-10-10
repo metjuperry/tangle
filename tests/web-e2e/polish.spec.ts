@@ -4,6 +4,41 @@ import { packLanes, stackSize } from '../../web/src/board/packing'
 import { readFile } from 'node:fs/promises'
 import { resolve } from 'node:path'
 
+test('locked screen uses board styling and logo, explains errors and unlocks on mobile', async ({ page }) => {
+  await page.goto('/')
+  await expect(page.getByRole('heading', { name: 'Pull requests, untangled.', exact: true })).toBeVisible()
+  await expect(page.locator('.login-wrap')).toHaveClass(/board-cork/)
+  await expect(page.locator('.login-mark')).toHaveAttribute('src', '/tangle-mark.svg')
+  expect(await page.locator('.login-mark').evaluate(img => (img as HTMLImageElement).naturalWidth)).toBeGreaterThan(0)
+  let result = await new AxeBuilder({ page }).withTags(['wcag2a', 'wcag2aa', 'wcag21aa']).analyze()
+  expect(result.violations).toEqual([])
+  await page.setViewportSize({ width: 390, height: 844 })
+  const key = page.getByLabel('Development key', { exact: true })
+  const unlock = page.getByRole('button', { name: 'Unlock Tangle', exact: true })
+  await expect(unlock).toBeInViewport()
+  expect(await page.evaluate(() => document.documentElement.scrollWidth <= window.innerWidth)).toBeTruthy()
+  await key.fill('incorrect-key')
+  await unlock.click()
+  await expect(page.getByRole('alert')).toHaveText('Invalid development key.')
+  await expect(key).toHaveAttribute('aria-invalid', 'true')
+  result = await new AxeBuilder({ page }).withTags(['wcag2a', 'wcag2aa', 'wcag21aa']).analyze()
+  expect(result.violations).toEqual([])
+  await page.route('**/api/auth/login', route => route.abort())
+  await unlock.click()
+  await expect(page.getByRole('alert')).toHaveText('Unable to reach Tangle.')
+  await expect(unlock).toBeEnabled()
+  await page.unroute('**/api/auth/login')
+  let release!: () => void
+  const wait = new Promise<void>(resolve => { release = resolve })
+  await page.route('**/api/auth/login', async route => { await wait; await route.continue() })
+  await key.fill('tangle-browser-test-key-not-a-secret')
+  await unlock.click()
+  await expect(page.getByRole('button', { name: 'Unlocking…', exact: true })).toBeDisabled()
+  release()
+  await expect(page.getByRole('region', { name: 'Yarn board' })).toBeVisible()
+  await expect(page.locator('.login-paper')).toHaveCount(0)
+})
+
 test('settings sitemap switches isolated sections without losing drafts and supports history and mobile', async ({ page }) => {
   await page.goto('/settings')
   await page.getByLabel('Development key').fill('tangle-browser-test-key-not-a-secret')

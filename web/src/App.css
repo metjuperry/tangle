@@ -123,6 +123,22 @@ a { color: var(--yarn); }
 .login-wrap, .settings-wrap { padding: 48px 24px; overflow: auto; }
 .login-paper, .settings-page { padding: 24px; background: var(--paper); max-width: 700px; box-shadow: 0 4px 12px #221c1540; }
 .settings-page label, .login-paper label { display: grid; gap: 8px; }.settings-page input, .settings-page select, .login-paper input { padding: 10px; margin: 8px 0; }.settings-page button, .login-paper button { padding: 10px; margin: 8px 0; }.settings-page input[type=checkbox] { padding: 0; }
+.login-wrap { display: grid; place-items: center; flex: 1; min-height: 0; padding: 48px 24px; }
+.login-paper { position: relative; width: 100%; max-width: 460px; padding: 32px 36px; border-radius: 3px; color: var(--ink); box-shadow: 5px 6px 0 #ede0c2,0 12px 32px #28140059; }
+.login-pin { position: absolute; top: -8px; left: calc(50% - 8px); width: 16px; height: 16px; border-radius: 50%; background: radial-gradient(circle at 35% 30%,#ffb18e 0 15%,var(--pin-me) 45%); box-shadow: 0 3px 4px #28140061; }
+.login-mark { display: block; margin: 0 auto 12px; }
+.login-eyebrow { text-align: center; font-family: 'IBM Plex Mono',monospace; font-size: 11px; letter-spacing: .08em; text-transform: uppercase; color: #5e564b; }
+.login-paper h1 { margin: 12px 0; text-align: center; font-size: 30px; line-height: 1.15; letter-spacing: -.02em; font-weight: 800; }
+.login-intro { margin: 0 0 24px; text-align: center; color: #5e564b; font-size: 14px; line-height: 1.6; }
+.login-paper form { display: grid; gap: 10px; }
+.login-paper label { font-size: 13px; font-weight: 700; }
+.login-paper input { width: 100%; min-width: 0; min-height: 44px; margin: 0; padding: 12px; border: 1px solid #b5a58d; border-radius: 4px; background: #fffdf8; color: var(--ink); }
+.login-paper input[aria-invalid=true] { border-color: var(--yarn); }
+.login-key-help,.login-footnote { margin: 0; color: #5e564b; font-size: 12px; line-height: 1.5; }
+.login-paper button { width: 100%; min-height: 44px; margin: 4px 0 0; padding: 12px 16px; border: 1px solid var(--ink); border-radius: 5px; background: var(--ink); color: var(--paper); font-weight: 700; }
+.login-error { margin: 0; padding: 10px 12px; border-left: 3px solid var(--yarn); background: #b3262f0d; color: #7e1a21; font-size: 13px; line-height: 1.5; }
+.login-footnote { margin-top: 24px; padding-top: 16px; border-top: 1px dashed #cfc3ac; text-align: center; }
+@media(max-width: 650px) { .login-wrap { padding: 32px 16px; }.login-paper { padding: 28px 24px; }.login-paper h1 { font-size: 27px; } }
 .settings-wrap:has(> .settings-page) { overflow: hidden; min-height: 0; }
 .settings-page { width: 100%; max-width: 1000px; height: 100%; min-height: 0; margin: 0 auto; padding: 0; border-radius: 6px; overflow: hidden; display: flex; flex-direction: column; }
 .settings-content { flex: 1; min-height: 0; overflow-y: auto; overscroll-behavior: contain; scroll-padding: 16px; }

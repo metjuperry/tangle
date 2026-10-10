@@ -253,11 +253,15 @@ function Shell() {
   const [authenticated, setAuthenticated] = useState(false)
   const [key, setKey] = useState('')
   const [error, setError] = useState('')
+  const [unlocking, setUnlocking] = useState(false)
   useEffect(() => {
     void fetch('/api/auth').then(r => setAuthenticated(r.ok)).catch(() => setError('Unable to reach Tangle.'))
   }, [])
   async function login(event: React.SubmitEvent<HTMLFormElement>) {
     event.preventDefault()
+    if (unlocking) return
+    setUnlocking(true)
+    setError('')
     try {
       const response = await fetch('/api/auth/login', {
         method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ key }),
@@ -265,13 +269,26 @@ function Shell() {
       if (!response.ok) { setError('Invalid development key.'); return }
       setKey(''); setError(''); setAuthenticated(true)
     } catch { setError('Unable to reach Tangle.') }
+    finally { setUnlocking(false) }
   }
   if (authenticated) return <Workspace />
   return <><header className="top-bar"><strong className="brand"><Brand /></strong><span>Pull requests, untangled.</span></header>
-    <main className="login-wrap"><section className="login-paper"><h1>Open your board</h1><form onSubmit={login}>
-      <label>Development key<input type="password" value={key} onChange={e => setKey(e.target.value)} required autoComplete="current-password" /></label>
-      <button>Unlock Tangle</button>
-    </form></section>{error && <p role="alert">{error}</p>}</main></>
+    <main className="login-wrap board-cork"><section className="login-paper" aria-labelledby="login-heading">
+      <span className="login-pin" aria-hidden="true" />
+      <img className="login-mark" src="/tangle-mark.svg" width="72" height="72" alt="" aria-hidden="true" />
+      <p className="login-eyebrow">Your board is locked</p>
+      <h1 id="login-heading">Pull requests, untangled.</h1>
+      <p className="login-intro">Pick up the thread. Open your board to see what needs you, what can wait and how it all connects.</p>
+      <form onSubmit={login} aria-busy={unlocking}>
+        <label htmlFor="development-key">Development key</label>
+        <input id="development-key" type="password" value={key} onChange={e => setKey(e.target.value)} required autoComplete="current-password"
+          aria-describedby={`login-key-help${error ? ' login-error' : ''}`} aria-invalid={error === 'Invalid development key.' || undefined} />
+        <p id="login-key-help" className="login-key-help">Use the key configured for this Tangle instance in user-secrets or the environment.</p>
+        {error && <p id="login-error" className="login-error" role="alert">{error}</p>}
+        <button disabled={unlocking}>{unlocking ? 'Unlocking…' : 'Unlock Tangle'}</button>
+      </form>
+      <p className="login-footnote">Your key is not saved in browser storage. GitHub actions still need your confirmation.</p>
+    </section></main></>
 }
 export default function App() {
   return <QueryClientProvider client={queries}><Shell /></QueryClientProvider>
