@@ -18,6 +18,8 @@ Successful results are cached by model, prompt content and complete bounded inpu
 
 Settings is organized into bordered sections for owners, repository permissions, AI privacy/budget, bot detection and recent calls. Each repo has independently labelled Watch and Allow AI controls; the page has one save bar at the bottom. No permission is changed just by this layout update.
 
+The save bar now remains visible below an independently scrolling settings area. AI history is collapsed by default and shows its entry count; expanding long histories does not push saving off-screen. Keyboard-accessible disclosure and mobile layouts are supported.
+
 Call history now records the job, assessed PR/pairs, and outcome (verdict or number of new suggested strings). PR assessments link to their card. Forward migration 0005 recovers prior verdict outcomes where their input hash matches; older pair calls without stored targets remain explicitly unidentified rather than guessed. This improvement makes no provider calls.
 
 ```sh
@@ -48,6 +50,14 @@ The implementing agent stops before doing these steps. Enabling AI is not implie
 Read next-step proposals on ten cards, compare reasons with their computed facts, and inspect every dashed `?` string. Tie or cut each proposal; verify those decisions survive sync. Inspect recent call costs in Settings. Sync again unchanged: cached verdicts and candidate answers should avoid repeated calls.
 
 ## Deviations and open questions
+
+AI reuse is now tracked per PR and per candidate pair, independently of request batches and prompt versions. Unchanged GitHub metadata and authored context do not trigger another call: clock-only age/idle changes, startup, sync and prompt edits are not automatic rerun triggers. Changed PR metadata, labels or sticky context can require a new judgment. Negative pair answers are retained even when no string is created. Paid/uncertain failed attempts are also remembered to prevent repeated charges for unchanged inputs; known zero-cost pre-dispatch failures can be retried.
+
+Forward migration 0009 adds look-state records without deleting existing answers. Identifiable successful prior calls are adopted when PR timestamps and authored context show no later change; older pair logs without targets cannot be reliably recovered. The Settings history shows only the latest 50 calls, so 50 displayed rows alone does not establish 50 calls on the last sync.
+
+Pair outputs now use schema-constrained numeric indices rather than asking the model to copy PR/sticky references. Tangle maps each index to its exact input pair, accepts reordered results and rejects duplicate/missing answers. Existing cached successful results remain stored; the new pair prompt/input format has a new cache key. No paid retries are triggered by the implementing agent.
+
+Prompts now request brief, plain-language reasons and intent, without internal field names. Existing AI text is displayed with known schema terms translated (for example behindBy → commits behind base); raw saved answers and your own labels/notes are unchanged. Prompt edits change cache keys, so a later user-triggered sync may regenerate allowed-repo judgments under the normal budget.
 
 Pair requests are now packed by serialized UTF-8 payload size as well as the 20-pair maximum. Large repeated PR contexts are split into smaller requests instead of aborting the pass. This 60 KB per-request bound is separate from the monthly USD budget. Requests rejected before dispatch have zero usage; migration 0007 releases only reservations bearing the exact old pre-dispatch size error. Unknown network usage remains conservatively reserved.
 

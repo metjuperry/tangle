@@ -36,10 +36,11 @@ public sealed class AiWorker(IAiStore store, HaikuDecider decider, ILiveEvents e
         foreach (var pr in snapshot.Prs)
         {
             var hash = Hash("verdict", pr);
-            if (await store.CachedAsync(hash, ct)) continue;
+            var work = AiCacheKeys.Verdict(pr);
+            if (await store.LookedAsync(work, snapshot.Prs, ct) || await store.CachedAsync(hash, ct)) continue;
             HaikuDecider.SerializeInput(pr);
             // Reserve a conservative bound before any provider call; unresolved calls retain the reservation.
-            var reservation = await store.ReserveAsync(hash, decider.Name, .02m, ct, "verdict", [pr.Ref]);
+            var reservation = await store.ReserveAsync(hash, decider.Name, .02m, ct, "verdict", [pr.Ref], [work]);
             if (reservation is null) { events.Publish("ai.budget", new { reached = true }); return; }
             try
             {
@@ -59,19 +60,22 @@ public sealed class AiWorker(IAiStore store, HaikuDecider decider, ILiveEvents e
                 throw;
             }
         }
-        var pairs = Candidates(snapshot);
+        var pairs = new List<PairContext>();
+        foreach (var pair in Candidates(snapshot))
+            if (!await store.LookedAsync(AiCacheKeys.Pair(pair), snapshot.Prs, ct)) pairs.Add(pair);
         foreach (var batch in Batches(pairs))
         {
-            var hash = Hash("pairs", batch);
+            var hash = Hash("pairs", HaikuDecider.PairInput(batch));
             if (await store.CachedAsync(hash, ct)) continue;
             var current = await store.SnapshotAsync(ct);
             var currentRefs = current.Prs.Select(p => p.Ref).Concat(current.Stickies.Select(s => s.Ref)).ToHashSet();
             var currentPairs = Candidates(current);
             if (batch.Any(p => !currentRefs.Contains(p.ARef) || !currentRefs.Contains(p.BRef) ||
                 current.ExistingPairs.Any(e => e.ARef == p.ARef && e.BRef == p.BRef) ||
-                !currentPairs.Any(fresh => fresh.ARef == p.ARef && fresh.BRef == p.BRef && Hash("pairs", fresh) == Hash("pairs", p)))) continue;
+                !currentPairs.Any(fresh => fresh.ARef == p.ARef && fresh.BRef == p.BRef &&
+                    AiCacheKeys.Pair(fresh).StateHash == AiCacheKeys.Pair(p).StateHash))) continue;
             var reservation = await store.ReserveAsync(hash, decider.Name, .20m, ct, "pairs",
-                batch.Select(p => $"{p.ARef} ↔ {p.BRef}").ToArray());
+                batch.Select(p => $"{p.ARef} ↔ {p.BRef}").ToArray(), batch.Select(AiCacheKeys.Pair).ToArray());
             if (reservation is null) { events.Publish("ai.budget", new { reached = true }); return; }
             try
             {
@@ -92,9 +96,9 @@ public sealed class AiWorker(IAiStore store, HaikuDecider decider, ILiveEvents e
         var current = new List<PairContext>();
         foreach (var pair in pairs)
         {
-            HaikuDecider.SerializeInput(new[] { pair });
+            HaikuDecider.SerializeInput(HaikuDecider.PairInput(new[] { pair }));
             var candidate = current.Append(pair).ToArray();
-            var bytes = Encoding.UTF8.GetByteCount(JsonSerializer.Serialize(candidate, HaikuDecider.Json));
+            var bytes = Encoding.UTF8.GetByteCount(JsonSerializer.Serialize(HaikuDecider.PairInput(candidate), HaikuDecider.Json));
             if (current.Count > 0 && (candidate.Length > 20 || bytes > HaikuDecider.MaximumInputBytes))
             {
                 result.Add(current.ToArray());

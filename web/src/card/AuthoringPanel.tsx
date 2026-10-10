@@ -2,6 +2,7 @@ import { useEffect, useRef, useState } from 'react'
 import { useMutation, useQueryClient } from '@tanstack/react-query'
 import { write, type Board, type Sticky, type Yarn } from '../api/client'
 import { useBoardUi } from '../board/store'
+import { friendlyAiText } from '../api/aiText'
 
 export function Notes({ board, targetRef }: { board: Board; targetRef: string }) {
   const [text, setText] = useState('')
@@ -19,7 +20,7 @@ export function StringEditor({ yarn, board }: { yarn: Yarn; board: Board }) {
   const mutation = useMutation({ mutationFn: (body: object) => write('/api/links/' + yarn.id, 'PATCH', body),
     onSuccess: async () => { await client.invalidateQueries({ queryKey: ['board'] }); await client.invalidateQueries({ queryKey: ['pr'] }) } })
   return <><p className="eyebrow">{yarn.source === 'me' ? 'Tied by you' : yarn.source === 'ai' ? 'AI-suggested string' : 'Linked by a rule'}</p><h2>{yarn.status === 'suggested' ? 'Do these belong together?' : 'These belong together'}</h2>
-    <p>{yarn.reason}</p><form className="handwritten-composer" onSubmit={e => { e.preventDefault(); mutation.mutate({ label }) }}>
+    <p>{yarn.source === 'ai' && yarn.reason ? friendlyAiText(yarn.reason) : yarn.reason}</p><form className="handwritten-composer" onSubmit={e => { e.preventDefault(); mutation.mutate({ label }) }}>
       <label>Label the string<input value={label} onChange={e => setLabel(e.target.value)} placeholder="same customer release" /></label><button className="paper-action navy-action" disabled={mutation.isPending}>Save label</button></form>
     {yarn.label && <p className="handwriting">{yarn.label}</p>}
     {[yarn.aRef, yarn.bRef].map(ref => <button className="related-card" key={ref} onClick={() => select(ref.startsWith('sticky:') ? ref : ref.slice(3))}>{ref.replace(/^pr:/, '')}</button>)}

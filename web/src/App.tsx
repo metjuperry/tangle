@@ -1,4 +1,4 @@
-import { useEffect, useRef, useState } from 'react'
+import { lazy, Suspense, useEffect, useRef, useState, useTransition } from 'react'
 import { QueryClient, QueryClientProvider, useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 import './App.css'
 import { api, type Board } from './api/client'
@@ -7,6 +7,13 @@ import { SidePanel } from './card/SidePanel'
 import { useBoardUi } from './board/store'
 import { useLiveEvents } from './api/events'
 import { NewSticky } from './card/AuthoringPanel'
+import { friendlyAiText } from './api/aiText'
+import type { Decision } from './deck/Untangle'
+import type { Action } from './deck/Receipt'
+import { ViewLoading } from './theme/ViewLoading'
+import { activeDecisionIds } from './deck/progress'
+import { ReceiptHistory } from './deck/ReceiptHistory'
+const Untangle = lazy(() => import('./deck/Untangle').then(module => ({ default: module.Untangle })))
 
 type Owner = { id: string; kind: 'org' | 'user'; watched: boolean }
 type Repo = { id: string; watched: boolean; aiAllowed: boolean }
@@ -19,6 +26,7 @@ function SettingsPage() {
   const queryClient = useQueryClient()
   const settings = useQuery({ queryKey: ['settings'], queryFn: () => api<Settings>('/api/settings') })
   const aiStatus = useQuery({ queryKey: ['ai'], queryFn: () => api<{ enabled: boolean; calls: AiCall[] }>('/api/ai/status') })
+  const applyPolicy = useQuery({ queryKey: ['apply-policy'], queryFn: () => api<{ enabled: boolean; sandboxRepo: string | null }>('/api/actions/policy') })
   const [draft, setDraft] = useState<Settings | null>(null)
   const [owner, setOwner] = useState('')
   const [kind, setKind] = useState<'org' | 'user'>('org')
@@ -32,7 +40,7 @@ function SettingsPage() {
   })
   if (settings.error) return <p role="alert">{settings.error.message}</p>
   if (!value) return <p>Loading settings…</p>
-  return <section className="settings-page"><div className="settings-heading"><h1>Settings</h1><p>Choose what goes on your board and what may leave your laptop.</p></div>
+  return <section className="settings-page"><div className="settings-content"><div className="settings-heading"><h1>Settings</h1><p>Choose what goes on your board and what may leave your laptop.</p></div>
     <section className="settings-section" aria-labelledby="owners-heading"><h2 id="owners-heading">Watched owners</h2>
     <p>Organizations and personal accounts to search for PRs involving you. Disabling an owner pauses all its repos.</p>
     {value.owners.length === 0 && <p className="quiet">No owners added yet.</p>}
@@ -68,24 +76,75 @@ function SettingsPage() {
     <label>Bot logins (comma-separated)<input value={value.botLogins.join(', ')}
       onChange={e => setDraft({ ...value, botLogins: e.target.value.split(',').map(s => s.trim()).filter(Boolean) })} /></label>
     </section>
-    <section className="settings-section" aria-labelledby="calls-heading"><h2 id="calls-heading">Recent AI calls</h2>{aiStatus.error && <p role="alert">{aiStatus.error.message}</p>}
+    <section className="settings-section" aria-labelledby="apply-policy-heading"><h2 id="apply-policy-heading">GitHub Apply safety</h2>
+      <p>{applyPolicy.data?.enabled ? `Apply is restricted to sandbox: ${applyPolicy.data.sandboxRepo ?? 'none configured'}.` : 'Apply is disabled. Queuing actions never posts them.'}</p>
+      <p className="quiet">Set Apply:SandboxRepo and Apply:Enabled in Host user-secrets only after authorizing sandbox tests. Each action still needs its own confirmation.</p>
+      {applyPolicy.error && <p role="alert">{applyPolicy.error.message}</p>}</section>
+    <section className="settings-section" aria-label="AI call history">
+    {aiStatus.error && <p role="alert">{aiStatus.error.message}</p>}
+    <details className="ai-history"><summary>Recent AI calls <span>{aiStatus.data ? `(${aiStatus.data.calls.length})` : '(loading…)'}</span></summary>
+    <p className="quiet">Request details and costs. These do not change your settings.</p>
     {aiStatus.data?.calls.length === 0 && <p className="quiet">No provider calls recorded.</p>}
     {aiStatus.data?.calls.map((call, i) => <article className="ai-call-row" key={i}>
       <div className="ai-call-heading"><b>{call.job === 'verdict' ? 'PR next-step assessment' : call.job === 'pairs' ? 'Relationship assessment' : 'Earlier AI call'}</b><span>{call.status}</span></div>
       {call.prId && <a href={`/?pr=${encodeURIComponent(call.prId)}`}>{call.prId} · View card</a>}
-      <p>{call.error ? `Failed: ${call.error}` : call.outcome ?? (call.status === 'reserved' ? 'Waiting for completion; usage may be unknown.' : 'Details were not recorded for this earlier call.')}</p>
+      <p>{call.error ? `Failed: ${call.error}` : call.outcome ? friendlyAiText(call.outcome) : (call.status === 'reserved' ? 'Waiting for completion; usage may be unknown.' : 'Details were not recorded for this earlier call.')}</p>
       {call.targets && <details><summary>What was assessed</summary><ul>{(JSON.parse(call.targets) as string[]).map(target => <li key={target}>{target.replaceAll('pr:', '')}</li>)}</ul></details>}
       <small>{new Date(call.createdAt).toLocaleString()} · ${call.cost.toFixed(6)}{call.status === 'reserved' && ` · $${call.reservedCost.toFixed(2)} budget reserved`} · {call.inputTokens} input / {call.outputTokens} output tokens · {call.latencyMs} ms</small>
-    </article>)}</section>
+    </article>)}</details></section></div>
     <footer className="settings-save"><span>Changes apply only when you save.</span><button disabled={save.isPending} onClick={() => save.mutate(value)}>{save.isPending ? 'Saving…' : 'Save settings'}</button>
     {save.error && <p role="alert">{save.error.message}</p>}{save.isSuccess && <p role="status">Settings saved.</p>}</footer>
   </section>
 }
 function Workspace() {
+  const [path, setPath] = useState(window.location.pathname)
+  const [destination, setDestination] = useState(path)
+  const [switching, startTransition] = useTransition()
+  const [navigationError, setNavigationError] = useState('')
   const [creatingSticky, setCreatingSticky] = useState(false)
+  const [showHistory, setShowHistory] = useState(false)
   const queryClient = useQueryClient()
-  const path = window.location.pathname
+  useEffect(() => {
+    function navigate(next: string, updateHistory: boolean) {
+      if (next === path) return
+      setDestination(next)
+      setNavigationError('')
+      startTransition(async () => {
+        try {
+          await queryClient.ensureQueryData({ queryKey: ['board'], queryFn: () => api<Board>('/api/board') })
+          if (next === '/untangle') {
+            await Promise.all([
+              import('./deck/Untangle'),
+              queryClient.ensureQueryData({ queryKey: ['decisions'], queryFn: () => api<Decision[]>('/api/decisions') }),
+              queryClient.ensureQueryData({ queryKey: ['actions'], queryFn: () => api<Action[]>('/api/actions') }),
+              queryClient.ensureQueryData({ queryKey: ['apply-policy'], queryFn: () => api<{ enabled: boolean; sandboxRepo: string | null }>('/api/actions/policy') }),
+            ])
+          }
+          startTransition(() => {
+            if (updateHistory) window.history.pushState(null, '', next)
+            setPath(next)
+          })
+        } catch (error) {
+          setNavigationError(error instanceof Error ? error.message : 'Unable to open the next view.')
+        }
+      })
+    }
+    const click = (event: MouseEvent) => {
+      if (event.defaultPrevented || event.button !== 0 || event.metaKey || event.ctrlKey || event.shiftKey || event.altKey) return
+      const anchor = event.target instanceof Element ? event.target.closest('a') : null
+      if (!anchor || anchor.target || anchor.hasAttribute('download')) return
+      const url = new URL(anchor.href)
+      if (url.origin !== window.location.origin || url.search || url.hash || !['/', '/untangle'].includes(url.pathname)) return
+      event.preventDefault()
+      navigate(url.pathname, true)
+    }
+    const pop = () => navigate(window.location.pathname, false)
+    document.addEventListener('click', click)
+    window.addEventListener('popstate', pop)
+    return () => { document.removeEventListener('click', click); window.removeEventListener('popstate', pop) }
+  }, [path, queryClient])
   const board = useQuery({ queryKey: ['board'], queryFn: () => api<Board>('/api/board') })
+  const decisions = useQuery({ queryKey: ['decisions'], queryFn: () => api<Decision[]>('/api/decisions') })
   const status = useLiveEvents()
   const dimOthers = useBoardUi(s => s.dimOthers)
   const toggleOthers = useBoardUi(s => s.toggleOthers)
@@ -107,23 +166,35 @@ function Workspace() {
   }, [board.data, path, mutate])
   const mine = board.data?.cards.filter(p => p.isMine).length ?? 0
   const others = (board.data?.cards.length ?? 0) - mine
+  const decidedCount = activeDecisionIds(board.data?.cards ?? [], decisions.data ?? []).size
   return <><header className="top-bar"><a className="brand" href="/" aria-label="Tangle board"><svg width="30" height="30" viewBox="0 0 30 30" fill="none" aria-hidden="true"><path d="M4 22C10 4 22 4 18 14S6 16 15 11 28 14 26 24" /></svg>tangle</a>
-    <nav className="view-switch"><a href="/" aria-current={path === '/' ? 'page' : undefined}>Board</a><span title="Arrives in M6">Untangle</span></nav>
+    <nav className="view-switch"><a href="/" aria-current={path === '/' ? 'page' : undefined}>Board</a><a href="/untangle" aria-current={path === '/untangle' ? 'page' : undefined}>Untangle</a></nav>
     <div className="header-counts"><span><b>{mine}</b> yours</span><span><b>{others}</b> around you</span><span><b>{board.data?.strings.length ?? 0}</b> strings</span></div>
-    <div className="header-spacer" /><span className="knot-meter">Untied 0 of {mine}<span aria-hidden="true" className="knots">{Array.from({ length: Math.min(mine, 20) }, (_, i) => <i key={i} />)}</span></span>
+    <div className="header-spacer" /><span className="knot-meter">Untied {decidedCount} of {mine}<span aria-hidden="true" className="knots">{Array.from({ length: Math.min(mine, 20) }, (_, i) => <i key={i} style={{ background: i < decidedCount ? 'var(--yarn)' : undefined }} />)}</span></span>
     <button className="header-button" disabled={others === 0} aria-pressed={others > 0 && dimOthers} onClick={toggleOthers}
       title={others === 0 ? 'Every PR on this board is authored by you.' : 'Fade cards authored by other people, not cards waiting on a reviewer.'}>
       {others === 0 ? 'No others’ PRs to dim' : dimOthers ? 'Show others’ PRs' : 'Dim others’ PRs'}</button>
     {path === '/' && <button className="header-button" onClick={() => setCreatingSticky(true)}>New sticky</button>}
-    <button className="header-button" disabled={sync.isPending} onClick={() => sync.mutate()}>{sync.isPending ? 'Syncing…' : 'Sync'}</button><a className="header-button" href="/settings">Settings</a></header>
+    <button className="header-button" disabled={sync.isPending} onClick={() => sync.mutate()}>{sync.isPending ? 'Syncing…' : 'Sync'}</button>
+    <button className="header-button" onClick={() => setShowHistory(true)}>History</button>
+    <a className="header-button" href="/settings">Settings</a></header>
+    {showHistory && <ReceiptHistory onClose={() => setShowHistory(false)} />}
     {creatingSticky && <NewSticky onClose={() => setCreatingSticky(false)} />}
     {(status || sync.error) && <div className={`notice ${sync.error ? 'notice-error' : ''}`} role={sync.error ? 'alert' : 'status'}>{sync.error?.message ?? status}</div>}
+    {navigationError && <div className="notice notice-error" role="alert">{navigationError}</div>}
+    <div className="view-stage" aria-busy={switching}>
+    {switching && <ViewLoading destination={destination} />}
+    <Suspense fallback={<ViewLoading destination={destination} />}>
     {path === '/settings' ? <main className="settings-wrap"><SettingsPage /></main> :
+      path === '/untangle' && board.data ? <Untangle board={board.data} /> :
+      path === '/untangle' && board.isPending ? <ViewLoading destination="/untangle" /> :
+      path === '/untangle' && board.error ? <main className="settings-wrap"><p role="alert">{board.error.message}</p></main> :
       path !== '/' ? <main className="settings-wrap"><h1>Page not found</h1><a href="/">Back to the board</a></main> :
       board.error ? <main className="settings-wrap"><p role="alert">{board.error.message}</p></main> :
       board.data ? <main className="board-workspace"><BoardView board={board.data} /><SidePanel board={board.data} />
         {board.data.cards.length === 0 && <div className="board-empty"><h1>Your yarn board</h1><p>No pull requests synced yet.</p><a href="/settings">Choose watched repositories</a></div>}</main> :
-      <main className="settings-wrap"><p role="status">Loading your board…</p></main>}</>
+      <ViewLoading destination="/" />}
+    </Suspense></div></>
 }
 function Shell() {
   const [authenticated, setAuthenticated] = useState(false)

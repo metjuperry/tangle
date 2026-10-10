@@ -1,4 +1,11 @@
 import { test, expect } from '../../web/node_modules/@playwright/test'
+import { actionLabel, friendlyAiText } from '../../web/src/api/aiText'
+
+test('AI text translates known schema labels without rewriting user prose or unknown identifiers', () => {
+  expect(friendlyAiText('Check `behindBy`, idleDays and review_decision.')).toBe('Check commits behind base, days without human activity and review status.')
+  expect(friendlyAiText('The behindByAdapter module needs a review.')).toBe('The behindByAdapter module needs a review.')
+  expect(actionLabel('fix')).toBe('Fix')
+})
 
 test('call history explains work and links to the assessed PR', async ({ page }) => {
   await page.route('**/api/ai/status', route => route.fulfill({ json: { enabled: true, calls: [{
@@ -13,10 +20,42 @@ test('call history explains work and links to the assessed PR', async ({ page })
   await page.goto('/settings')
   await page.getByLabel('Development key').fill('tangle-browser-test-key-not-a-secret')
   await page.getByRole('button', { name: 'Unlock Tangle' }).click()
+  await page.getByText('Recent AI calls', { exact: false }).click()
   await expect(page.getByText('fix: Reply to four review asks.')).toBeVisible()
   await expect(page.getByText('Assessed 1 candidate pairs; created 0 suggested strings.')).toBeVisible()
   await page.getByRole('link', { name: 'example/repo#49 · View card' }).click()
   await expect(page.getByRole('heading', { name: 'Open asks · 4' })).toBeVisible()
+})
+test('save stays visible with long repo and AI histories on desktop and mobile', async ({ page }) => {
+  await page.route('**/api/settings', async route => {
+    if (route.request().method() !== 'GET') { await route.continue(); return }
+    const response = await route.fetch()
+    const settings = await response.json()
+    settings.repos = Array.from({ length: 40 }, (_, i) => ({ id: `example/repo-${i}`, watched: true, aiAllowed: false }))
+    await route.fulfill({ json: settings })
+  })
+  await page.route('**/api/ai/status', route => route.fulfill({ json: { enabled: false, calls: Array.from({ length: 50 }, (_, i) => ({
+    job: 'verdict', prId: null, targets: null, outcome: `Assessment ${i}`, status: 'completed', error: null,
+    createdAt: '2026-10-10T12:00:00Z', cost: .001, reservedCost: .02, inputTokens: 100, outputTokens: 40, latencyMs: 50,
+  })) } }))
+  await page.goto('/settings')
+  await page.getByLabel('Development key').fill('tangle-browser-test-key-not-a-secret')
+  await page.getByRole('button', { name: 'Unlock Tangle' }).click()
+  const save = page.getByRole('button', { name: 'Save settings', exact: true })
+  await expect(save).toBeInViewport()
+  await expect(page.locator('.ai-history')).not.toHaveAttribute('open', '')
+  await expect(page.getByText('Assessment 0', { exact: true })).not.toBeVisible()
+  await page.locator('.ai-history > summary').click()
+  await expect(page.getByText('Assessment 0', { exact: true })).toBeVisible()
+  await expect(save).toBeInViewport()
+  await page.getByText('Assessment 49', { exact: true }).scrollIntoViewIfNeeded()
+  await expect(save).toBeInViewport()
+  await page.setViewportSize({ width: 390, height: 844 })
+  await expect(save).toBeInViewport()
+  const footer = await page.locator('.settings-save').boundingBox()
+  expect(footer!.y + footer!.height).toBeLessThanOrEqual(844)
+  await page.locator('.settings-content').evaluate(el => { el.scrollTop = el.scrollHeight })
+  await expect(save).toBeInViewport()
 })
 
 test('AI verdict and suggested string display as proposals, tie and cut stay human actions', async ({ page }) => {
@@ -24,7 +63,7 @@ test('AI verdict and suggested string display as proposals, tie and cut stay hum
     const response = await route.fetch()
     const board = await response.json()
     board.cards.find((c: { number: number }) => c.number === 49).verdict = {
-      action: 'fix', confidence: .9, priority: 4, reason: 'Answer four unresolved review asks.', intent: 'Add a metadata checkpoint.',
+      action: 'fix', confidence: .9, priority: 4, reason: 'Check behindBy and answer four unresolved review asks.', intent: 'Add a metadata checkpoint.',
     }
     board.strings = [{ id: 'fixture-ai', aRef: 'pr:example/repo#49', bRef: 'pr:example/tools#195',
       source: 'ai', status: 'suggested', reason: 'Both add connector metadata.', label: null }]
@@ -35,7 +74,7 @@ test('AI verdict and suggested string display as proposals, tie and cut stay hum
   await page.getByLabel('Development key').fill('tangle-browser-test-key-not-a-secret')
   await page.getByRole('button', { name: 'Unlock Tangle' }).click()
   await page.getByRole('button', { name: /example\/repo #49,/ }).click()
-  await expect(page.getByText('Answer four unresolved review asks.')).toBeVisible()
+  await expect(page.getByText('Check commits behind base and answer four unresolved review asks.')).toBeVisible()
   await expect(page.getByText('AI proposal, not an action.')).toBeVisible()
   await page.locator('.yarn-tag').click()
   await expect(page.getByRole('heading', { name: 'Do these belong together?' })).toBeVisible()

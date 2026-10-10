@@ -26,16 +26,40 @@ public sealed class HaikuDecider(AnthropicClient client) : IDecider
         "confidence":{"type":"number"},"priority":{"type":"integer"},"reason":{"type":"string"},"intent":{"type":"string"}},
         "required":["action","confidence","priority","reason","intent"],"additionalProperties":false}
         """;
-    private static readonly string PairsSchema = """
-        {"type":"object","properties":{"pairs":{"type":"array","items":{"type":"object",
-        "properties":{"aRef":{"type":"string"},"bRef":{"type":"string"},"related":{"type":"number"},"reason":{"type":"string"}},
-        "required":["aRef","bRef","related","reason"],"additionalProperties":false}}},
-        "required":["pairs"],"additionalProperties":false}
-        """;
     public async Task<PrJudgment> JudgePrAsync(PrContext pr, CancellationToken ct) =>
         ParseVerdict(await SendAsync("verdict", pr, VerdictSchema, 1024, ct));
-    public async Task<IReadOnlyList<LinkJudgment>> JudgePairsAsync(IReadOnlyList<PairContext> pairs, CancellationToken ct) =>
-        ParsePairs(await SendAsync("pairs", pairs, PairsSchema, 4096, ct), pairs);
+    public async Task<IReadOnlyList<LinkJudgment>> JudgePairsAsync(IReadOnlyList<PairContext> pairs, CancellationToken ct)
+    {
+        if (pairs.Count == 0) return [];
+        var schema = JsonSerializer.Serialize(new
+        {
+            type = "object",
+            properties = new
+            {
+                pairs = new
+                {
+                    type = "array",
+                    items = new
+                    {
+                        type = "object",
+                        properties = new
+                        {
+                            pairIndex = new { type = "integer", @enum = Enumerable.Range(0, pairs.Count).ToArray() },
+                            related = new { type = "number" },
+                            reason = new { type = "string" }
+                        },
+                        required = new[] { "pairIndex", "related", "reason" },
+                        additionalProperties = false
+                    }
+                }
+            },
+            required = new[] { "pairs" },
+            additionalProperties = false
+        });
+        return ParsePairs(await SendAsync("pairs", PairInput(pairs), schema, 4096, ct), pairs);
+    }
+    public static object PairInput(IReadOnlyList<PairContext> pairs) =>
+        pairs.Select((context, pairIndex) => new { pairIndex, context }).ToArray();
 
     private async Task<string> SendAsync(string job, object input, string schema, int maxTokens, CancellationToken ct)
     {
@@ -79,15 +103,21 @@ public sealed class HaikuDecider(AnthropicClient client) : IDecider
     public static IReadOnlyList<LinkJudgment> ParsePairs(string json, IReadOnlyList<PairContext> expected)
     {
         var response = JsonSerializer.Deserialize<PairsResponse>(json, Json) ?? throw new InvalidOperationException("Empty pair answer.");
-        var allowed = expected.Select(p => (p.ARef, p.BRef)).ToHashSet();
+        var seen = new HashSet<int>();
+        var result = new List<LinkJudgment>();
         if (response.Pairs is null || response.Pairs.Count != expected.Count) throw new InvalidOperationException("Pair answer has missing entries.");
         foreach (var p in response.Pairs)
         {
-            if (!allowed.Remove((p.ARef, p.BRef))) throw new InvalidOperationException("Unknown or duplicate pair in answer.");
+            if (p.PairIndex < 0 || p.PairIndex >= expected.Count)
+                throw new InvalidOperationException($"Unknown pair index {p.PairIndex}; expected 0–{expected.Count - 1}.");
+            if (!seen.Add(p.PairIndex))
+                throw new InvalidOperationException($"Duplicate pair index {p.PairIndex} in answer; no suggestions were saved.");
             Probability(p.Related);
             if (string.IsNullOrWhiteSpace(p.Reason)) throw new InvalidOperationException("Pair answer needs a reason.");
+            var pair = expected[p.PairIndex];
+            result.Add(new(pair.ARef, pair.BRef, p.Related, p.Reason));
         }
-        return response.Pairs;
+        return result;
     }
     private static void Probability(double value)
     {
@@ -103,6 +133,12 @@ public sealed class HaikuDecider(AnthropicClient client) : IDecider
     }
     public sealed record PairsResponse
     {
-        public required IReadOnlyList<LinkJudgment> Pairs { get; init; }
+        public required IReadOnlyList<PairResponse> Pairs { get; init; }
+    }
+    public sealed record PairResponse
+    {
+        public required int PairIndex { get; init; }
+        public required double Related { get; init; }
+        public required string Reason { get; init; }
     }
 }
