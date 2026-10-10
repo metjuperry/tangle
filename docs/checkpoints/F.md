@@ -33,6 +33,8 @@ Forward migration 0008 adds persisted decisions. It does not delete or replace y
 
 Create a throwaway repo, such as `metjuperry/tangle-sandbox`, with disposable PRs, and explicitly authorize the action kinds to test there. The agent has not created a repo or posted any GitHub mutation.
 
+Metju created `metjuperry/tangle-sandbox` and explicitly authorized throwaway test-data creation. A baseline and three independent PRs are now available: [comment #1](https://github.com/metjuperry/tangle-sandbox/pull/1), [close #2](https://github.com/metjuperry/tangle-sandbox/pull/2), and [merge #3](https://github.com/metjuperry/tangle-sandbox/pull/3). All remain open; no test comment, review request, close or merge was performed. Live Apply still needs separate authorization for those operations.
+
 For your own manual sandbox run:
 
 ```sh
