@@ -7,7 +7,6 @@ import { SidePanel } from './card/SidePanel'
 import { useBoardUi } from './board/store'
 import { useLiveEvents } from './api/events'
 import { NewSticky } from './card/AuthoringPanel'
-import { friendlyAiText } from './api/aiText'
 import type { Decision } from './deck/Untangle'
 import type { Action } from './deck/Receipt'
 import { ViewLoading } from './theme/ViewLoading'
@@ -15,19 +14,18 @@ import { activeDecisionIds } from './deck/progress'
 import { ReceiptHistory } from './deck/ReceiptHistory'
 import { PersonalKeys } from './settings/PersonalKeys'
 import { Evaluate } from './evaluate/Evaluate'
+import type { AiStatus } from './evaluate/AiCalls'
 const Untangle = lazy(() => import('./deck/Untangle').then(module => ({ default: module.Untangle })))
 
 type Owner = { id: string; kind: 'org' | 'user'; watched: boolean }
 type Repo = { id: string; watched: boolean; aiAllowed: boolean }
 type Settings = { owners: Owner[]; repos: Repo[]; botLogins: string[]; aiBudget: number; aiVerdicts: string; aiPairs: string; aiExplain: string }
 type SyncResult = { fetched: number; changed: number; calls: number; cost: number }
-type AiCall = { cost: number; reservedCost: number; status: string; error: string | null; createdAt: string; job: string | null;
-  targets: string | null; outcome: string | null; prId: string | null; inputTokens: number; outputTokens: number; latencyMs: number }
 const queries = new QueryClient()
 function SettingsPage() {
   const queryClient = useQueryClient()
   const settings = useQuery({ queryKey: ['settings'], queryFn: () => api<Settings>('/api/settings') })
-  const aiStatus = useQuery({ queryKey: ['ai'], queryFn: () => api<{ enabled: boolean; jevEnabled: boolean; calls: AiCall[] }>('/api/ai/status') })
+  const aiStatus = useQuery({ queryKey: ['ai'], queryFn: () => api<AiStatus>('/api/ai/status') })
   const applyPolicy = useQuery({ queryKey: ['apply-policy'], queryFn: () => api<{ enabled: boolean; sandboxRepo: string | null }>('/api/actions/policy') })
   const [draft, setDraft] = useState<Settings | null>(null)
   const [owner, setOwner] = useState('')
@@ -90,18 +88,12 @@ function SettingsPage() {
       <p className="quiet">Set Apply:SandboxRepo and Apply:Enabled in Host user-secrets only after authorizing sandbox tests. Each action still needs its own confirmation.</p>
       {applyPolicy.error && <p role="alert">{applyPolicy.error.message}</p>}</section>
     <PersonalKeys />
-    <section className="settings-section" aria-label="AI call history">
+    <section className="settings-section" aria-labelledby="evaluate-settings-heading">
+    <h2 id="evaluate-settings-heading">Evaluation and AI history</h2>
+    <p>Review suggestion quality, compare models and inspect recent AI calls without making provider requests.</p>
+    <a className="settings-evaluate-link" href="/evaluate">Open Evaluate</a>
     {aiStatus.error && <p role="alert">{aiStatus.error.message}</p>}
-    <details className="ai-history"><summary>Recent AI calls <span>{aiStatus.data ? `(${aiStatus.data.calls.length})` : '(loading…)'}</span></summary>
-    <p className="quiet">Request details and costs. These do not change your settings.</p>
-    {aiStatus.data?.calls.length === 0 && <p className="quiet">No provider calls recorded.</p>}
-    {aiStatus.data?.calls.map((call, i) => <article className="ai-call-row" key={i}>
-      <div className="ai-call-heading"><b>{call.job === 'verdict' ? 'PR next-step assessment' : call.job === 'pairs' ? 'Relationship assessment' : 'Earlier AI call'}</b><span>{call.status}</span></div>
-      {call.prId && <a href={`/?pr=${encodeURIComponent(call.prId)}`}>{call.prId} · View card</a>}
-      <p>{call.error ? `Failed: ${call.error}` : call.outcome ? friendlyAiText(call.outcome) : (call.status === 'reserved' ? 'Waiting for completion; usage may be unknown.' : 'Details were not recorded for this earlier call.')}</p>
-      {call.targets && <details><summary>What was assessed</summary><ul>{(JSON.parse(call.targets) as string[]).map(target => <li key={target}>{target.replaceAll('pr:', '')}</li>)}</ul></details>}
-      <small>{new Date(call.createdAt).toLocaleString()} · ${call.cost.toFixed(6)}{call.status === 'reserved' && ` · $${call.reservedCost.toFixed(2)} budget reserved`} · {call.inputTokens} input / {call.outputTokens} output tokens · {call.latencyMs} ms</small>
-    </article>)}</details></section></div>
+    </section></div>
     <footer className="settings-save"><span>Changes apply only when you save.</span><button disabled={save.isPending} onClick={() => save.mutate(value)}>{save.isPending ? 'Saving…' : 'Save settings'}</button>
     {save.error && <p role="alert">{save.error.message}</p>}{save.isSuccess && <p role="status">Settings saved.</p>}</footer>
   </section>
@@ -187,7 +179,6 @@ function Workspace() {
     {path === '/' && <button className="header-button" onClick={() => setCreatingSticky(true)}>New sticky</button>}
     <button className="header-button" disabled={sync.isPending} onClick={() => sync.mutate()}>{sync.isPending ? 'Syncing…' : 'Sync'}</button>
     <button className="header-button" onClick={() => setShowHistory(true)}>History</button>
-    <a className="header-button" href="/evaluate">Evaluate</a>
     <a className="header-button" href="/settings">Settings</a></header>
     {showHistory && <ReceiptHistory onClose={() => setShowHistory(false)} />}
     {creatingSticky && <NewSticky onClose={() => setCreatingSticky(false)} />}

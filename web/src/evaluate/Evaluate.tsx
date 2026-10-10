@@ -1,6 +1,7 @@
 import { useState } from 'react'
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 import { api, write } from '../api/client'
+import { AiCalls, type AiStatus } from './AiCalls'
 
 type Stats = { decider: string; pairExamples: number; verdictExamples: number; precision: number | null; recall: number | null;
   agreement: number | null; pairBrier: number | null; verdictBrier: number | null; costPer100: number | null;
@@ -9,13 +10,13 @@ type Report = { labelledExamples: number; needed: number; excludedSnoozes: numbe
 const percent = (value: number | null) => value === null ? 'Not enough data' : `${(value * 100).toFixed(1)}%`
 export function Evaluate() {
   const report = useQuery({ queryKey: ['evaluation'], queryFn: () => api<Report>('/api/evaluation') })
-  const status = useQuery({ queryKey: ['ai'], queryFn: () => api<{ enabled: boolean; jevEnabled: boolean }>('/api/ai/status') })
+  const status = useQuery({ queryKey: ['ai'], queryFn: () => api<AiStatus>('/api/ai/status') })
   const [decider, setDecider] = useState('haiku-5-5')
   const [confirmed, setConfirmed] = useState(false)
   const client = useQueryClient()
   const replay = useMutation({ mutationFn: () => write<{ calls: number }>('/api/evaluation/replay', 'POST', { decider, confirmed }),
     onSuccess: async () => { setConfirmed(false); await client.invalidateQueries({ queryKey: ['evaluation'] }); await client.invalidateQueries({ queryKey: ['ai'] }) } })
-  return <main className="settings-wrap"><section className="evaluation-page"><h1>Evaluate</h1>
+  return <main className="settings-wrap"><section className="evaluation-page"><a href="/settings">Back to Settings</a><h1>Evaluate</h1>
     <p>How well do the suggestions match your decisions? Viewing stats makes no AI calls.</p>
     {report.isPending && <p role="status">Reading your labelled decisions…</p>}
     {report.error && <p role="alert">{report.error.message}</p>}
@@ -46,5 +47,5 @@ export function Evaluate() {
       {!status.data?.enabled && <p className="quiet">Provider calls are disabled on the server.</p>}
       {status.error && <p role="alert">{status.error.message}</p>}{replay.error && <p role="alert">{replay.error.message}</p>}
       {replay.data && <p role="status">Replay finished: {replay.data.calls} new calls. Previously replayed examples were skipped.</p>}
-    </section></section></main>
+    </section><AiCalls calls={status.data?.calls} /></section></main>
 }

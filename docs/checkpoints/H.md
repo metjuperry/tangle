@@ -18,7 +18,7 @@ Published as [PR #9](https://github.com/metjuperry/tangle/pull/9), based on M7 a
 
 ## Run and demo — 10 minutes
 
-Build web and restart the host as usual. Open **Evaluate** in the header.
+Build web and restart the host as usual. Open **Settings → Open Evaluate**. Evaluation is not in the main header; recent AI calls now live in a collapsible history on Evaluate rather than on Settings.
 
 1. Read the labelled-example coverage. If there are fewer than 30, keep triaging rather than trusting small-sample metrics.
 2. Read Haiku agreement and string metrics. Expand disagreements and compare with what you know.
