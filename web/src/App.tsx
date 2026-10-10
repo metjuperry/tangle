@@ -6,6 +6,7 @@ import { BoardView } from './board/BoardView'
 import { SidePanel } from './card/SidePanel'
 import { useBoardUi } from './board/store'
 import { useLiveEvents } from './api/events'
+import { NewSticky } from './card/AuthoringPanel'
 
 type Owner = { id: string; kind: 'org' | 'user'; watched: boolean }
 type Repo = { id: string; watched: boolean; aiAllowed: boolean }
@@ -50,6 +51,7 @@ function SettingsPage() {
   </section>
 }
 function Workspace() {
+  const [creatingSticky, setCreatingSticky] = useState(false)
   const queryClient = useQueryClient()
   const path = window.location.pathname
   const board = useQuery({ queryKey: ['board'], queryFn: () => api<Board>('/api/board') })
@@ -76,7 +78,9 @@ function Workspace() {
     <button className="header-button" disabled={others === 0} aria-pressed={others > 0 && dimOthers} onClick={toggleOthers}
       title={others === 0 ? 'Every PR on this board is authored by you.' : 'Fade cards authored by other people, not cards waiting on a reviewer.'}>
       {others === 0 ? 'No others’ PRs to dim' : dimOthers ? 'Show others’ PRs' : 'Dim others’ PRs'}</button>
+    {path === '/' && <button className="header-button" onClick={() => setCreatingSticky(true)}>New sticky</button>}
     <button className="header-button" disabled={sync.isPending} onClick={() => sync.mutate()}>{sync.isPending ? 'Syncing…' : 'Sync'}</button><a className="header-button" href="/settings">Settings</a></header>
+    {creatingSticky && <NewSticky onClose={() => setCreatingSticky(false)} />}
     {(status || sync.error) && <div className={`notice ${sync.error ? 'notice-error' : ''}`} role={sync.error ? 'alert' : 'status'}>{sync.error?.message ?? status}</div>}
     {path === '/settings' ? <main className="settings-wrap"><SettingsPage /></main> :
       path !== '/' ? <main className="settings-wrap"><h1>Page not found</h1><a href="/">Back to the board</a></main> :
