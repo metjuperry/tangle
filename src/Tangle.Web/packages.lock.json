@@ -69,6 +69,13 @@
           "SQLitePCLRaw.bundle_e_sqlite3": "[2.1.13, )",
           "Tangle.Core": "[1.0.0, )"
         }
+      },
+      "tangle.sessions": {
+        "type": "Project",
+        "dependencies": {
+          "Tangle.Core": "[1.0.0, )",
+          "Tangle.Data": "[1.0.0, )"
+        }
       }
     }
   }

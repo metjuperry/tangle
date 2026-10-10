@@ -31,38 +31,15 @@ public static class ActionEndpoints
             events.Publish("receipt.saved", new { roundId });
             return Results.Ok(new { roundId });
         });
-        api.MapPost("/actions", async (QueueInput input, ActionStore store, SyncStore sync, IGitHubActions github,
-            EventHub events, ILogger<ActionStore> logger, CancellationToken ct) =>
+        api.MapPost("/actions", async (QueueInput input, ActionQueue queue, ILogger<ActionStore> logger, CancellationToken ct) =>
         {
-            if (input.Kind is not ("comment" or "request_review" or "close" or "merge") || input.Payload is null)
-                throw new ArgumentException("Choose comment, request_review, close or merge.");
-            if (input.Kind == "comment" && (string.IsNullOrWhiteSpace(input.Payload.Text) || input.Payload.Text.Length > 10000))
-                throw new ArgumentException("Comment text is required, up to 10,000 characters.");
-            if (input.Kind == "request_review" && (string.IsNullOrWhiteSpace(input.Payload.Reviewer) || !System.Text.RegularExpressions.Regex.IsMatch(input.Payload.Reviewer, "^[A-Za-z0-9-]{1,39}$")))
-                throw new ArgumentException("A GitHub reviewer login is required.");
-            var payload = input.Payload;
-            if (input.Kind == "merge")
+            if (input.Payload is null) throw new ArgumentException("Action payload is required.");
+            try { return Results.Ok(await queue.QueueAsync(input.PrId, input.Kind, input.Payload, ct)); }
+            catch (HttpRequestException e)
             {
-                var card = (await sync.GetBoardAsync(ct: ct)).FirstOrDefault(c => c.Id == input.PrId);
-                if (card is null) throw new ArgumentException("PR must be cached, watched and open.");
-                try
-                {
-                    var target = await github.InspectAsync(card.RepoId, checked((int)card.Number), ct);
-                    if (target.State != "OPEN") throw new InvalidOperationException("PR is no longer open.");
-                    if (!FactsEngine.Same(target.Author, target.Viewer))
-                        throw new InvalidOperationException("Merging another person's PR is not allowed.");
-                    if (!System.Text.RegularExpressions.Regex.IsMatch(target.HeadSha, "^[a-fA-F0-9]{40}$"))
-                        throw new InvalidOperationException("GitHub returned an invalid PR head.");
-                    payload = new ActionPayload(HeadSha: target.HeadSha);
-                }
-                catch (HttpRequestException e)
-                {
-                    logger.LogError(e, "Unable to capture PR head for queued merge");
-                    return Results.Json(new { error = "Unable to read the current PR version from GitHub. Merge was not queued." }, statusCode: 502);
-                }
+                logger.LogError(e, "Unable to prepare queued action");
+                return Results.Json(new { error = "Unable to read the PR version from GitHub. Action was not queued." }, statusCode: 502);
             }
-            var action = await store.QueueAsync(input.PrId, input.Kind, JsonSerializer.Serialize(payload), ct);
-            events.Publish("action.changed", new { action.Id }); return Results.Ok(action);
         });
         api.MapDelete("/actions/{id}", async (string id, ActionStore store, EventHub events, CancellationToken ct) =>
         { await store.DismissAsync(id, ct); events.Publish("action.changed", new { id }); return Results.Ok(new { dismissed = true }); });

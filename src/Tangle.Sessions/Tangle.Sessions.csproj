@@ -2,6 +2,7 @@
 
   <ItemGroup>
     <ProjectReference Include="..\Tangle.Core\Tangle.Core.csproj" />
+    <ProjectReference Include="..\Tangle.Data\Tangle.Data.csproj" />
   </ItemGroup>
 
   <PropertyGroup>
@@ -10,4 +11,7 @@
     <Nullable>enable</Nullable>
   </PropertyGroup>
 
+  <ItemGroup>
+    <FrameworkReference Include="Microsoft.AspNetCore.App" />
+  </ItemGroup>
 </Project>

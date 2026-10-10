@@ -7,6 +7,7 @@ import { useMutation, useQueryClient } from '@tanstack/react-query'
 import { write } from '../api/client'
 import { ActionComposer } from '../deck/Receipt'
 import { useState } from 'react'
+import { Sessions } from './Sessions'
 import { actionLabel, friendlyAiText } from '../api/aiText'
 
 export function SidePanel({ board }: { board: Board }) {
@@ -47,6 +48,7 @@ export function SidePanel({ board }: { board: Board }) {
         <strong>{actionLabel(card.verdict.action)}</strong><p>{friendlyAiText(card.verdict.reason)}</p><p className="quiet">AI proposal, not an action.</p>
         {card.verdict.createdAt && <p className="quiet">Generated {new Date(card.verdict.createdAt).toLocaleString()}; check against current facts.</p>}</div>}
       {card.verdict?.intent && <><h3>Why it exists</h3><p>{friendlyAiText(card.verdict.intent)}</p></>}
+      <Sessions key={`sessions:${card.id}`} prId={card.id} />
       {context.isPending && <p role="status">Loading the card back…</p>}
       {context.error && <p role="alert">{context.error.message}</p>}
       {context.data && <>

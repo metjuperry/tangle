@@ -3,6 +3,7 @@
   <ItemGroup>
     <ProjectReference Include="..\Tangle.Core\Tangle.Core.csproj" />
     <ProjectReference Include="..\Tangle.Data\Tangle.Data.csproj" />
+    <ProjectReference Include="..\Tangle.Sessions\Tangle.Sessions.csproj" />
   </ItemGroup>
 
   <PropertyGroup>

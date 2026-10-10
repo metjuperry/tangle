@@ -4,6 +4,8 @@ using Tangle.Web;
 using Tangle.GitHub;
 using Tangle.Ai;
 using Anthropic;
+using Tangle.Mcp;
+using Tangle.Sessions;
 
 var builder = WebApplication.CreateBuilder(args);
 builder.WebHost.UseUrls(builder.Configuration["Tangle:Address"] ?? new RuntimeSettings().Address);
@@ -24,6 +26,10 @@ builder.Services.AddSingleton<TimeProvider>(TimeProvider.System);
 builder.Services.AddSingleton<SyncStore>();
 builder.Services.AddSingleton<AuthoringStore>();
 builder.Services.AddSingleton<ActionStore>();
+builder.Services.AddSingleton<ActionQueue>();
+builder.Services.AddSingleton<PersonalKeys>();
+builder.Services.AddSingleton<SessionService>();
+builder.Services.AddTangleMcp();
 builder.Services.AddSingleton<IAiStore, AiStore>();
 builder.Services.AddSingleton(services =>
 {
@@ -49,11 +55,14 @@ var app = builder.Build();
 var applied = await app.Services.GetRequiredService<Database>().MigrateAsync();
 app.Logger.LogInformation("Applied {Count} database migrations", applied);
 await app.Services.GetRequiredService<SyncStore>().RecomputeAsync();
+await app.Services.GetRequiredService<SessionService>().MatchAsync(CancellationToken.None);
 app.UseLocalAuthentication(app.Services.GetRequiredService<RuntimeSettings>());
 app.MapGet("/healthz", () => Results.Ok(new { status = "ok" }));
 app.MapSyncEndpoints();
 app.MapAuthoringEndpoints();
 app.MapActionEndpoints();
+app.MapSessionEndpoints();
+app.MapTangleMcp();
 app.MapWebShell();
 app.Run();
 

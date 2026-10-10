@@ -13,6 +13,7 @@ import type { Action } from './deck/Receipt'
 import { ViewLoading } from './theme/ViewLoading'
 import { activeDecisionIds } from './deck/progress'
 import { ReceiptHistory } from './deck/ReceiptHistory'
+import { PersonalKeys } from './settings/PersonalKeys'
 const Untangle = lazy(() => import('./deck/Untangle').then(module => ({ default: module.Untangle })))
 
 type Owner = { id: string; kind: 'org' | 'user'; watched: boolean }
@@ -80,6 +81,7 @@ function SettingsPage() {
       <p>{applyPolicy.data?.enabled ? `Apply is restricted to sandbox: ${applyPolicy.data.sandboxRepo ?? 'none configured'}.` : 'Apply is disabled. Queuing actions never posts them.'}</p>
       <p className="quiet">Set Apply:SandboxRepo and Apply:Enabled in Host user-secrets only after authorizing sandbox tests. Each action still needs its own confirmation.</p>
       {applyPolicy.error && <p role="alert">{applyPolicy.error.message}</p>}</section>
+    <PersonalKeys />
     <section className="settings-section" aria-label="AI call history">
     {aiStatus.error && <p role="alert">{aiStatus.error.message}</p>}
     <details className="ai-history"><summary>Recent AI calls <span>{aiStatus.data ? `(${aiStatus.data.calls.length})` : '(loading…)'}</span></summary>
