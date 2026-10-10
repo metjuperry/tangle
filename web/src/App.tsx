@@ -14,11 +14,12 @@ import { ViewLoading } from './theme/ViewLoading'
 import { activeDecisionIds } from './deck/progress'
 import { ReceiptHistory } from './deck/ReceiptHistory'
 import { PersonalKeys } from './settings/PersonalKeys'
+import { Evaluate } from './evaluate/Evaluate'
 const Untangle = lazy(() => import('./deck/Untangle').then(module => ({ default: module.Untangle })))
 
 type Owner = { id: string; kind: 'org' | 'user'; watched: boolean }
 type Repo = { id: string; watched: boolean; aiAllowed: boolean }
-type Settings = { owners: Owner[]; repos: Repo[]; botLogins: string[]; aiBudget: number }
+type Settings = { owners: Owner[]; repos: Repo[]; botLogins: string[]; aiBudget: number; aiVerdicts: string; aiPairs: string; aiExplain: string }
 type SyncResult = { fetched: number; changed: number; calls: number; cost: number }
 type AiCall = { cost: number; reservedCost: number; status: string; error: string | null; createdAt: string; job: string | null;
   targets: string | null; outcome: string | null; prId: string | null; inputTokens: number; outputTokens: number; latencyMs: number }
@@ -26,7 +27,7 @@ const queries = new QueryClient()
 function SettingsPage() {
   const queryClient = useQueryClient()
   const settings = useQuery({ queryKey: ['settings'], queryFn: () => api<Settings>('/api/settings') })
-  const aiStatus = useQuery({ queryKey: ['ai'], queryFn: () => api<{ enabled: boolean; calls: AiCall[] }>('/api/ai/status') })
+  const aiStatus = useQuery({ queryKey: ['ai'], queryFn: () => api<{ enabled: boolean; jevEnabled: boolean; calls: AiCall[] }>('/api/ai/status') })
   const applyPolicy = useQuery({ queryKey: ['apply-policy'], queryFn: () => api<{ enabled: boolean; sandboxRepo: string | null }>('/api/actions/policy') })
   const [draft, setDraft] = useState<Settings | null>(null)
   const [owner, setOwner] = useState('')
@@ -73,6 +74,13 @@ function SettingsPage() {
     <label className="budget-field">Monthly AI budget (USD)<input type="number" min="0" max="100" step="0.01" value={value.aiBudget ?? 1}
       onChange={e => setDraft({ ...value, aiBudget: Number(e.target.value) })} /></label>
     <p className="quiet">API keys and GitHub tokens belong in user-secrets or your environment, never in this page.</p></section>
+    <section className="settings-section" aria-labelledby="decider-heading"><h2 id="decider-heading">AI jobs</h2>
+      <p>Haiku remains the default. Switching a job to Jev requires explicit server opt-in and your TYPESAFE_API_KEY.</p>
+      {(['aiVerdicts', 'aiPairs', 'aiExplain'] as const).map((job, i) => <label key={job}>{['Next-step verdicts', 'Relationship suggestions', 'Written explanations'][i]}
+        <select value={value[job] ?? 'haiku-5-5'} onChange={event => setDraft({ ...value, [job]: event.target.value })}>
+          <option value="haiku-5-5">Haiku 5.5</option>{job !== 'aiExplain' && <option value="jev" disabled={!aiStatus.data?.jevEnabled}>Jev {!aiStatus.data?.jevEnabled && '(disabled)'}</option>}
+        </select></label>)}
+    </section>
     <section className="settings-section" aria-labelledby="bots-heading"><h2 id="bots-heading">Bot detection</h2><p>These accounts don’t count as human activity when calculating idle time and whose turn it is.</p>
     <label>Bot logins (comma-separated)<input value={value.botLogins.join(', ')}
       onChange={e => setDraft({ ...value, botLogins: e.target.value.split(',').map(s => s.trim()).filter(Boolean) })} /></label>
@@ -179,6 +187,7 @@ function Workspace() {
     {path === '/' && <button className="header-button" onClick={() => setCreatingSticky(true)}>New sticky</button>}
     <button className="header-button" disabled={sync.isPending} onClick={() => sync.mutate()}>{sync.isPending ? 'Syncing…' : 'Sync'}</button>
     <button className="header-button" onClick={() => setShowHistory(true)}>History</button>
+    <a className="header-button" href="/evaluate">Evaluate</a>
     <a className="header-button" href="/settings">Settings</a></header>
     {showHistory && <ReceiptHistory onClose={() => setShowHistory(false)} />}
     {creatingSticky && <NewSticky onClose={() => setCreatingSticky(false)} />}
@@ -188,6 +197,7 @@ function Workspace() {
     {switching && <ViewLoading destination={destination} />}
     <Suspense fallback={<ViewLoading destination={destination} />}>
     {path === '/settings' ? <main className="settings-wrap"><SettingsPage /></main> :
+      path === '/evaluate' ? <Evaluate /> :
       path === '/untangle' && board.data ? <Untangle board={board.data} /> :
       path === '/untangle' && board.isPending ? <ViewLoading destination="/untangle" /> :
       path === '/untangle' && board.error ? <main className="settings-wrap"><p role="alert">{board.error.message}</p></main> :

@@ -1,0 +1,19 @@
+{
+  "model": "jev-1.13.0",
+  "answers": {
+    "action": {
+      "type": "choice",
+      "choice": "fix",
+      "probabilities": { "merge": 0.02, "fix": 0.8, "ping": 0.05, "wait": 0.08, "close": 0.03, "split": 0.02 },
+      "confidence": 0.7
+    },
+    "priority": {
+      "type": "score",
+      "score": 3.2,
+      "legend": { "0": "Lowest", "1": "Low", "2": "Medium", "3": "High", "4": "Highest" },
+      "probabilities": { "0": 0, "1": 0, "2": 0, "3": 0.8, "4": 0.2 },
+      "confidence": 0.7
+    }
+  },
+  "usage": { "input_tokens": 500, "output_tokens": 40 }
+}

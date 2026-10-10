@@ -20,7 +20,7 @@ public static partial class SyncEndpoints
     {
         var api = app.MapGroup("/api").RequireAuthorization();
         api.MapGet("/settings", async (ISyncStore store, CancellationToken ct) => Results.Ok(await store.GetSettingsAsync(ct)));
-        api.MapPut("/settings", async (WatchedSettings input, ISyncStore store, EventHub events, CancellationToken ct) =>
+        api.MapPut("/settings", async (WatchedSettings input, ISyncStore store, EventHub events, IConfiguration config, CancellationToken ct) =>
         {
             if (input.Owners is null || input.Repos is null ||
                 input.BotLogins is null || input.BotLogins.Any(b => string.IsNullOrWhiteSpace(b) || b.Length > 100 || b.Any(char.IsWhiteSpace)) ||
@@ -31,6 +31,10 @@ public static partial class SyncEndpoints
                 return Results.BadRequest(new { error = "Supply unique valid owner names (kind org/user) and owner/repo names." });
             if (input.AiBudget is < 0 or > 100)
                 return Results.BadRequest(new { error = "AI monthly budget must be between $0 and $100." });
+            if (input.AiVerdicts is not ("haiku-5-5" or "jev") || input.AiPairs is not ("haiku-5-5" or "jev") || input.AiExplain != "haiku-5-5")
+                return Results.BadRequest(new { error = "Verdicts/pairs support Haiku or Jev. Explanations require Haiku." });
+            if ((input.AiVerdicts == "jev" || input.AiPairs == "jev") && !config.GetValue<bool>("Ai:JevEnabled"))
+                return Results.BadRequest(new { error = "Jev is disabled on the server. Enable it explicitly before selecting this provider." });
             await store.SaveSettingsAsync(input, ct);
             events.Publish("prs.changed", new { ids = Array.Empty<string>() });
             return Results.Ok(await store.GetSettingsAsync(ct));
@@ -79,7 +83,7 @@ public static partial class SyncEndpoints
                   status,error,created_at AS createdAt,job,targets,outcome,pr_id AS prId,reserved_cost AS reservedCost
                 FROM ai_call ORDER BY created_at DESC LIMIT 50
                 """, cancellationToken: ct));
-            return Results.Ok(new { enabled = config.GetValue<bool>("Ai:Enabled"), calls });
+            return Results.Ok(new { enabled = config.GetValue<bool>("Ai:Enabled"), jevEnabled = config.GetValue<bool>("Ai:JevEnabled"), calls });
         });
     }
 }

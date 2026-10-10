@@ -10,7 +10,7 @@ namespace Tangle.Mcp;
 
 [McpServerToolType]
 public sealed class TangleTools(SyncStore sync, SyncService synchronizer, AuthoringStore authoring,
-    ActionQueue actions, Database database, TimeProvider clock, ILiveEvents events, SessionService sessions)
+    ActionQueue actions, Database database, TimeProvider clock, ILiveEvents events, SessionService sessions, IEvaluationReports evaluation)
 {
     private async Task Fresh(CancellationToken ct)
     {
@@ -66,11 +66,10 @@ public sealed class TangleTools(SyncStore sync, SyncService synchronizer, Author
         }
         return Json(groups);
     }
-    [McpServerTool(Name = "get_eval_report"), Description("Read evaluation availability; evaluation runner arrives in M8. Never triggers an AI evaluation.")]
+    [McpServerTool(Name = "get_eval_report"), Description("Read evaluation metrics and labelled-example coverage. Never triggers provider calls or a replay.")]
     public async Task<string> GetEvalReport(CancellationToken ct)
     {
-        await Fresh(ct);
-        return Json(new { available = false, reason = "Evaluation is not implemented until M8." });
+        return Json(await evaluation.GetAsync(ct));
     }
     [McpServerTool(Name = "add_note"), Description("Save a local note to a pr:, sticky: or link: reference. Never posts to GitHub.")]
     public async Task<string> AddNote(string targetRef, string text, CancellationToken ct)
@@ -112,7 +111,8 @@ public sealed class TangleTools(SyncStore sync, SyncService synchronizer, Author
         await using var db = await database.OpenAsync(ct);
         var hash = Guid.NewGuid().ToString();
         await db.ExecuteAsync(new CommandDefinition("""
-            INSERT INTO verdict VALUES(@prId,'mcp',@action,@confidence,@reason,@intent,@priority,@hash,@at)
+            INSERT INTO verdict(pr_id,decider,action,confidence,reason,intent,priority,input_hash,created_at)
+            VALUES(@prId,'mcp',@action,@confidence,@reason,@intent,@priority,@hash,@at)
             """, new { prId, action = parsed.ToString().ToLowerInvariant(), confidence, reason, intent, priority, hash, at = clock.GetUtcNow().ToString("O") },
             cancellationToken: ct));
         events.Publish("verdict.ready", new { id = prId }); return Json(new { proposed = true });

@@ -35,7 +35,8 @@ public sealed class AiStore(Database database, SyncStore sync, AuthoringStore au
         }
         var budget = await db.QuerySingleAsync<string>(new CommandDefinition("SELECT value FROM app_setting WHERE key='ai_budget'", cancellationToken: ct));
         return new(contexts, own.Stickies.Select(s => new AiSticky($"sticky:{s.Id}", s.Title)).ToArray(),
-            strings.Select(s => new AiPair(s.ARef, s.BRef)).ToArray(), decimal.Parse(budget, System.Globalization.CultureInfo.InvariantCulture));
+            strings.Select(s => new AiPair(s.ARef, s.BRef)).ToArray(), decimal.Parse(budget, System.Globalization.CultureInfo.InvariantCulture))
+        { VerdictDecider = settings.AiVerdicts, PairDecider = settings.AiPairs };
     }
     private static string Limit(string text, int length) => text.Length > length ? text[..length] : text;
     public async Task<bool> CachedAsync(string hash, CancellationToken ct)
@@ -44,7 +45,7 @@ public sealed class AiStore(Database database, SyncStore sync, AuthoringStore au
         return await db.ExecuteScalarAsync<int>(new CommandDefinition("SELECT COUNT(*) FROM ai_cache WHERE input_hash=@hash", new { hash }, cancellationToken: ct)) > 0;
     }
     public async Task<AiReservation?> ReserveAsync(string hash, string decider, decimal maximumCost, CancellationToken ct,
-        string? job = null, IReadOnlyList<string>? targets = null, IReadOnlyList<AiWork>? work = null)
+        string? job = null, IReadOnlyList<string>? targets = null, IReadOnlyList<AiWork>? work = null, string? inputJson = null)
     {
         await using var db = await database.OpenAsync(ct);
         using var tx = db.BeginTransaction(deferred: false);
@@ -63,10 +64,10 @@ public sealed class AiStore(Database database, SyncStore sync, AuthoringStore au
         if (used + maximumCost > budget) return null;
         var id = Guid.NewGuid().ToString();
         await db.ExecuteAsync(new CommandDefinition("""
-            INSERT INTO ai_call(id,decider,input_hash,input_tokens,output_tokens,cost,latency_ms,created_at,status,reserved_cost,job,targets)
-            VALUES(@id,@decider,@hash,0,0,0,0,@at,'reserved',@maximumCost,@job,@targets)
+            INSERT INTO ai_call(id,decider,input_hash,input_tokens,output_tokens,cost,latency_ms,created_at,status,reserved_cost,job,targets,input_json)
+            VALUES(@id,@decider,@hash,0,0,0,0,@at,'reserved',@maximumCost,@job,@targets,@inputJson)
             """, new { id, decider, hash, at = clock.GetUtcNow().ToString("O"), maximumCost, job,
-                targets = targets is null ? null : JsonSerializer.Serialize(targets) }, tx, cancellationToken: ct));
+                targets = targets is null ? null : JsonSerializer.Serialize(targets), inputJson }, tx, cancellationToken: ct));
         foreach (var item in work ?? [])
             await db.ExecuteAsync(new CommandDefinition(
                 "INSERT INTO ai_look(job,target,state_hash,call_id) VALUES(@Job,@Target,@StateHash,@id)",
@@ -119,18 +120,30 @@ public sealed class AiStore(Database database, SyncStore sync, AuthoringStore au
         var at = clock.GetUtcNow().ToString("O");
         var savedVerdict = false;
         var suggested = 0;
+        var decider = await db.QuerySingleAsync<string>(new CommandDefinition("SELECT decider FROM ai_call WHERE id=@id",
+            new { id = reservation.Id }, tx, cancellationToken: ct));
+        var inputJson = await db.QuerySingleOrDefaultAsync<string>(new CommandDefinition("SELECT input_json FROM ai_call WHERE id=@id",
+            new { id = reservation.Id }, tx, cancellationToken: ct));
         if (pr is not null && verdict is not null && await Allowed(db, tx, pr.Ref, ct))
         {
             await db.ExecuteAsync(new CommandDefinition("""
-                INSERT INTO verdict(pr_id,decider,action,confidence,reason,intent,priority,input_hash,created_at)
-                VALUES(@id,'haiku-5-5',@action,@Confidence,@Reason,@Intent,@Priority,@hash,@at)
+                INSERT INTO verdict(pr_id,decider,action,confidence,reason,intent,priority,input_hash,created_at,input_json)
+                VALUES(@id,@decider,@action,@Confidence,@Reason,@Intent,@Priority,@hash,@at,@inputJson)
                 ON CONFLICT(pr_id,decider,input_hash) DO NOTHING
                 """, new { id = pr.Ref[3..], action = verdict.Action.ToString().ToLowerInvariant(), verdict.Confidence, verdict.Reason,
-                    verdict.Intent, verdict.Priority, hash = reservation.InputHash, at }, tx, cancellationToken: ct));
+                    verdict.Intent, verdict.Priority, hash = reservation.InputHash, at, decider, inputJson }, tx, cancellationToken: ct));
             savedVerdict = true;
         }
         foreach (var link in links ?? [])
         {
+            var originalPairs = inputJson is null ? [] : JsonSerializer.Deserialize<PairContext[]>(inputJson, new JsonSerializerOptions(JsonSerializerDefaults.Web)) ?? [];
+            var context = originalPairs.FirstOrDefault(p => p.ARef == link.ARef && p.BRef == link.BRef);
+            var canonical = new[] { link.ARef, link.BRef }.Order(StringComparer.Ordinal).ToArray();
+            await db.ExecuteAsync(new CommandDefinition("""
+                INSERT INTO pair_prediction VALUES(@id,@a,@b,@decider,@related,@reason,@context,@at,@call)
+                """, new { id = Guid.NewGuid().ToString(), a = canonical[0], b = canonical[1], decider, related = link.Related,
+                    reason = link.Reason, context = context is null ? null : JsonSerializer.Serialize(context, new JsonSerializerOptions(JsonSerializerDefaults.Web)),
+                    at, call = reservation.Id }, tx, cancellationToken: ct));
             if (link.Related <= .75 || !await Allowed(db, tx, link.ARef, ct) || !await Allowed(db, tx, link.BRef, ct)) continue;
             var (a, b) = string.CompareOrdinal(link.ARef, link.BRef) < 0 ? (link.ARef, link.BRef) : (link.BRef, link.ARef);
             suggested += await db.ExecuteAsync(new CommandDefinition("""

@@ -69,6 +69,8 @@ public static class BrowserHost
             builder.ConfigureAppConfiguration((_, config) => config.AddInMemoryCollection(new Dictionary<string, string?>
             {
                 ["Tangle:DevelopmentKey"] = "tangle-browser-test-key-not-a-secret",
+                ["Ai:Enabled"] = "false",
+                ["Ai:JevEnabled"] = "false",
                 ["Tangle:Address"] = "http://127.0.0.1:5203",
                 ["Tangle:DatabasePath"] = Path.Combine(directory, "fixture.db")
             }));

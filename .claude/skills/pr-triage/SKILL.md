@@ -30,5 +30,6 @@ requesting reviews, closing or merging through another GitHub tool. The user
 confirms Apply in the board, one action at a time.
 
 Tangle's automatic AI opt-in does not authorize sending data from disabled repos
-to another provider or running paid evaluations. `get_eval_report` reports
-availability only until the M8 evaluation feature is built.
+to another provider or running paid evaluations. `get_eval_report` reads saved
+metrics only; it never runs a provider replay. Mention sample coverage and metric
+limitations when interpreting its results.

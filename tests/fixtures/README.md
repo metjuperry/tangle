@@ -11,3 +11,5 @@ node tests/fixtures/record-github.mjs
 Review both the JSON and the Verify snapshot before accepting changes. The recorder requests only PR metadata, not diffs or file contents, and never calls an AI provider.
 
 `scaffold-batches.json` contains public platform-metadata search metadata recorded on 2026-10-10. Authors and template identifiers are anonymized; title patterns, dates and PR numbers are retained. It includes 33 matching scaffold appliers and two unrelated search hits. Refresh intentionally with `node tests/fixtures/record-batches.mjs`; normal tests never run the recorder.
+
+`jev-verdict.json` and `jev-pair.json` are synthetic responses matching the verified TypeSafe HTTP API documentation (https://docs.typesafe.ai/api.md). They are not live provider recordings. Tests assert request/answer types, probabilities and score semantics; no key or provider call is required.

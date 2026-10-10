@@ -19,7 +19,11 @@ public sealed record PrContext(string Ref, string RepoId, string Title, string B
 }
 public sealed record PairContext(string ARef, string BRef, PrContext A, PrContext? B, string? StickyTitle);
 public sealed record AiSnapshot(IReadOnlyList<PrContext> Prs, IReadOnlyList<AiSticky> Stickies,
-    IReadOnlyList<AiPair> ExistingPairs, decimal Budget);
+    IReadOnlyList<AiPair> ExistingPairs, decimal Budget)
+{
+    public string VerdictDecider { get; init; } = "haiku-5-5";
+    public string PairDecider { get; init; } = "haiku-5-5";
+}
 public sealed record AiSticky(string Ref, string Title);
 public sealed record AiPair(string ARef, string BRef);
 public sealed record AiUsage(long InputTokens, long OutputTokens, decimal Cost, long LatencyMs);
@@ -28,6 +32,7 @@ public sealed record AiWork(string Job, string Target, string StateHash);
 public sealed record StoredVerdict(string PrId, string Action, double Confidence, int Priority, string? Reason, string? Intent, string CreatedAt)
 {
     public StoredVerdict() : this("", "", 0, 0, null, null, "") { }
+    public string Decider { get; init; } = "";
 }
 public interface IAiStore
 {
@@ -35,7 +40,7 @@ public interface IAiStore
     Task<bool> CachedAsync(string hash, CancellationToken ct);
     Task<bool> LookedAsync(AiWork work, IReadOnlyList<PrContext> prs, CancellationToken ct);
     Task<AiReservation?> ReserveAsync(string hash, string decider, decimal maximumCost, CancellationToken ct,
-        string? job = null, IReadOnlyList<string>? targets = null, IReadOnlyList<AiWork>? work = null);
+        string? job = null, IReadOnlyList<string>? targets = null, IReadOnlyList<AiWork>? work = null, string? inputJson = null);
     Task FinishAsync(AiReservation reservation, AiUsage usage, PrContext? pr, PrJudgment? verdict,
         IReadOnlyList<LinkJudgment>? links, CancellationToken ct);
     Task FailAsync(AiReservation reservation, string error, AiUsage? usage, CancellationToken ct);

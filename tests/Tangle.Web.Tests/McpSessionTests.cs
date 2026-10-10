@@ -109,7 +109,7 @@ public sealed class McpSessionTests
         Assert.Contains("example/repo#1", await tools.ListPrs(default));
         Assert.Contains("Fixture", await tools.GetPrContext("example/repo#1", default));
         Assert.Contains("prs", await tools.GetThreads(default));
-        Assert.Contains("M8", await tools.GetEvalReport(default));
+        Assert.Contains("labelledExamples", await tools.GetEvalReport(default));
         var note = await tools.AddNote("pr:example/repo#1", "note", default);
         Assert.Contains("note", note);
         await tools.ProposeLink("pr:example/repo#1", "pr:example/repo#2", "Shared work", default);

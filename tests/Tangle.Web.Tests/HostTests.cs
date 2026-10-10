@@ -20,6 +20,8 @@ public sealed class TangleFactory : WebApplicationFactory<Program>
             new Dictionary<string, string?>
             {
                 ["Tangle:DevelopmentKey"] = Key,
+                ["Ai:Enabled"] = "false",
+                ["Ai:JevEnabled"] = "false",
                 ["Tangle:Address"] = "http://127.0.0.1:5202",
                 ["Tangle:DatabasePath"] = Path.Combine(directory, "test.db")
             }));
