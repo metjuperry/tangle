@@ -10,6 +10,8 @@ public static class WebShell
         var provider = new ManifestEmbeddedFileProvider(typeof(WebShell).Assembly, "wwwroot");
         app.UseDefaultFiles(new DefaultFilesOptions { FileProvider = provider });
         app.UseStaticFiles(new StaticFileOptions { FileProvider = provider });
+        app.Map("/api/{**path}", () => Microsoft.AspNetCore.Http.Results.NotFound());
+        app.Map("/debug/{**path}", () => Microsoft.AspNetCore.Http.Results.NotFound());
         app.MapFallbackToFile("index.html", new StaticFileOptions { FileProvider = provider });
     }
 }

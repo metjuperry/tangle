@@ -54,7 +54,7 @@ public interface ISyncStore
 }
 public sealed record SyncResult(int Fetched, int Changed, int Calls, int Cost);
 
-public sealed class SyncService(IGitHubReader github, ISyncStore store, TimeProvider clock)
+public sealed class SyncService(IGitHubReader github, ISyncStore store, TimeProvider clock, ILiveEvents? events = null)
 {
     private readonly SemaphoreSlim gate = new(1, 1);
     public async Task<SyncResult> RunAsync(CancellationToken ct)
@@ -62,6 +62,7 @@ public sealed class SyncService(IGitHubReader github, ISyncStore store, TimeProv
         if (!await gate.WaitAsync(0, ct)) throw new SyncInProgressException();
         try
         {
+            events?.Publish("sync.started", new { });
             var settings = await store.GetSettingsAsync(ct);
             var scopes = settings.Owners.Where(o => o.Watched)
                 .Select(o => (Owner: o.Id, Filter: $"{(o.Kind == "user" ? "user" : "org")}:{o.Id}"))
@@ -92,6 +93,7 @@ public sealed class SyncService(IGitHubReader github, ISyncStore store, TimeProv
                         var page = await github.SearchAsync(scope.Owner,
                             $"is:pr is:{state} involves:{viewer} archived:false {scope.Filter}{excluded}{window}", after, viewer, ct);
                         fetched += page.Prs.Count; calls += page.CallCount; cost += page.Cost;
+                        events?.Publish("sync.progress", new { scope = scope.Filter, fetched, calls, cost });
                         foreach (var pr in page.Prs) prs[pr.Id] = pr;
                         if (!page.HasNextPage) break;
                         if (string.IsNullOrEmpty(page.EndCursor) || !cursors.Add(page.EndCursor))
@@ -100,8 +102,15 @@ public sealed class SyncService(IGitHubReader github, ISyncStore store, TimeProv
                     } while (true);
                 }
                 changed += await store.SaveScopeAsync(scopeKey, prs.Values.ToArray(), started.ToString("O"), ct);
+                events?.Publish("prs.changed", new { ids = prs.Keys.ToArray() });
             }
+            events?.Publish("sync.finished", new { fetched, changed, calls, cost, success = true });
             return new(fetched, changed, calls, cost);
+        }
+        catch (Exception)
+        {
+            events?.Publish("sync.finished", new { success = false });
+            throw;
         }
         finally { gate.Release(); }
     }

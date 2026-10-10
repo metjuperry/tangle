@@ -18,7 +18,7 @@ public static partial class SyncEndpoints
     {
         var api = app.MapGroup("/api").RequireAuthorization();
         api.MapGet("/settings", async (ISyncStore store, CancellationToken ct) => Results.Ok(await store.GetSettingsAsync(ct)));
-        api.MapPut("/settings", async (WatchedSettings input, ISyncStore store, CancellationToken ct) =>
+        api.MapPut("/settings", async (WatchedSettings input, ISyncStore store, EventHub events, CancellationToken ct) =>
         {
             if (input.Owners is null || input.Repos is null ||
                 input.BotLogins is null || input.BotLogins.Any(b => string.IsNullOrWhiteSpace(b) || b.Length > 100 || b.Any(char.IsWhiteSpace)) ||
@@ -30,6 +30,7 @@ public static partial class SyncEndpoints
             if (input.Repos.Any(r => r.AiAllowed))
                 return Results.BadRequest(new { error = "AI is unavailable until M5; all repo switches must remain off." });
             await store.SaveSettingsAsync(input, ct);
+            events.Publish("prs.changed", new { ids = Array.Empty<string>() });
             return Results.Ok(await store.GetSettingsAsync(ct));
         });
         api.MapPost("/sync", async (SyncService sync, ILogger<SyncService> logger, CancellationToken ct) =>
@@ -48,9 +49,22 @@ public static partial class SyncEndpoints
             return Results.Ok(new { zones = cards.Select(c => c.RepoId).Distinct(), cards,
                 batches = cards.Where(c => c.BatchId is not null).GroupBy(c => c.BatchId)
                     .Select(g => new { id = g.Key, repoId = g.First().RepoId, prIds = g.Select(c => c.Id) }),
-                stickies = Array.Empty<object>(), strings = await store.GetStringsAsync(ct), positions = Array.Empty<object>() });
+                stickies = Array.Empty<object>(), strings = await store.GetStringsAsync(ct), positions = Array.Empty<object>(),
+                lastSyncAt = await store.GetLastSyncAsync(ct) });
         });
-        api.MapGet("/debug/prs", async (SyncStore store, CancellationToken ct) =>
-            Results.Ok(await store.GetBoardAsync(includeClosed: true, ct: ct)));
+        api.MapGet("/prs/{owner}/{repo}/{number:int}", async (string owner, string repo, int number, SyncStore store, CancellationToken ct) =>
+        {
+            var context = await store.GetCardContextAsync($"{owner}/{repo}#{number}", ct);
+            return context is null ? Results.NotFound(new { error = "PR not found in watched repositories." }) : Results.Ok(context);
+        });
+        api.MapGet("/events", (HttpContext context, EventHub events) =>
+        {
+            var value = context.Request.Headers["Last-Event-ID"].ToString();
+            if (value.Length > 0 && (!long.TryParse(value, out var parsed) || parsed < 0))
+                return Results.BadRequest(new { error = "Last-Event-ID must be a nonnegative integer." });
+            context.Response.Headers.CacheControl = "no-cache, no-store";
+            context.Response.Headers["X-Accel-Buffering"] = "no";
+            return Results.ServerSentEvents(events.Subscribe(value.Length == 0 ? null : long.Parse(value), context.RequestAborted));
+        });
     }
 }
