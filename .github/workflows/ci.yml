@@ -21,6 +21,7 @@ jobs:
         working-directory: web
       - run: dotnet restore --locked-mode && dotnet test --no-restore
       - run: node --test tests/hooks/session-hook.test.mjs
+      - run: node docs/generate-guide.mjs --check
       - run: npx playwright install --with-deps chromium && npx playwright test
         working-directory: web
       - uses: actions/upload-artifact@v4

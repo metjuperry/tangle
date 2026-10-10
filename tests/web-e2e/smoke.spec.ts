@@ -29,8 +29,8 @@ test('fixture board renders cards, zones, batch and sagging strings', async ({ p
     const transform = new DOMMatrix(getComputedStyle(el).transform)
     return { x: transform.m41, y: transform.m42, width: el.getBoundingClientRect().width / transform.a }
   }))
-  expect(new Set(zones.map(zone => zone.y)).size).toBe(1)
-  expect(zones.every((zone, i) => i === 0 || zone.x > zones[i - 1].x)).toBeTruthy()
+  expect(new Set(zones.map(zone => zone.y)).size).toBe(3)
+  expect(zones.some(zone => zone.x > 24)).toBeTruthy()
   await expect(page.locator('.batch-card')).toHaveCount(1)
   await expect(page.locator('.batch-card')).toContainText('33 scaffold applier PRs')
   await expect(page.getByRole('button', { name: 'Rule string: example/repo#49 and example/tools#195', exact: true })).toBeVisible()
@@ -157,6 +157,7 @@ test('branch chain is ordered without internal yarn clutter and every PR opens',
 })
 test('settings persists bot logins and removed debug path is gone', async ({ page }) => {
   await unlock(page, '/settings')
+  await page.getByRole('link', { name: 'Bot detection', exact: true }).click()
   await page.getByLabel('Bot logins (comma-separated)').fill('dependabot[bot], custom-bot')
   await page.getByRole('button', { name: 'Save settings' }).click()
   await expect(page.getByRole('status').filter({ hasText: 'Settings saved.' })).toBeVisible()

@@ -16,7 +16,7 @@ export function Evaluate() {
   const client = useQueryClient()
   const replay = useMutation({ mutationFn: () => write<{ calls: number }>('/api/evaluation/replay', 'POST', { decider, confirmed }),
     onSuccess: async () => { setConfirmed(false); await client.invalidateQueries({ queryKey: ['evaluation'] }); await client.invalidateQueries({ queryKey: ['ai'] }) } })
-  return <main className="settings-wrap"><section className="evaluation-page"><a href="/settings">Back to Settings</a><h1>Evaluate</h1>
+  return <main className="settings-wrap"><section className="evaluation-page"><a href="/settings#evaluation">Back to Settings</a><h1>Evaluate</h1>
     <p>How well do the suggestions match your decisions? Viewing stats makes no AI calls.</p>
     {report.isPending && <p role="status">Reading your labelled decisions…</p>}
     {report.error && <p role="alert">{report.error.message}</p>}
