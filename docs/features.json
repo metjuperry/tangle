@@ -49,10 +49,10 @@
     "id": "sync-ai",
     "title": "Sync, privacy and evaluation",
     "paragraphs": [
-      "Settings chooses watched organizations, accounts and repositories. Sync reads PRs involving your GitHub account; opening a board more than ten minutes stale also syncs once. There is no scheduled sync. GitHub rate-limit points are an API allowance, not money.",
+      "Settings has a sidebar sitemap showing one section at a time; on small screens, use the section picker. Changes remain unsaved when you switch sections, and Save settings applies all sections together. Agent key creation and revocation take effect immediately. Sync reads PRs involving your GitHub account; opening a board more than ten minutes stale also syncs once. There is no scheduled sync. GitHub rate-limit points are an API allowance, not money.",
       "AI requires server enablement, a provider key and an explicit Allow AI switch for each repo. It sees bounded titles, descriptions, changed paths, review excerpts and relevant labels, never diffs or file contents. Check client policy before opting in. A provider API key and API billing are separate from a Claude subscription.",
       "Unchanged PRs and pairs reuse their last assessment across syncs and restarts. Clock-only aging, prompt edits and batch packing do not automatically recheck them. Changed metadata or your labels can justify a new assessment; paid or uncertain failures are not retried silently. Starting a new receipt round does not force AI reruns.",
-      "Settings → Open Evaluate shows labelled-sample metrics, disagreement lists, a report and Recent AI calls. Viewing makes no provider calls. A fresh replay is explicitly confirmed, budgeted and limited to permitted original inputs. Fewer than 30 labels and missing old input snapshots are reported. Snooze is not scored as a verdict.",
+      "Settings → Evaluation and AI history → Open Evaluate shows labelled-sample metrics, disagreement lists, a report and Recent AI calls. Viewing makes no provider calls. A fresh replay is explicitly confirmed, budgeted and limited to permitted original inputs. Fewer than 30 labels and missing old input snapshots are reported. Snooze is not scored as a verdict.",
       "Haiku is the default; Jev remains disabled until explicitly enabled on the server. Jev returns decisions rather than prose. Explain with Haiku is a separate paid request. Monthly budget limits further calls; unresolved usage remains conservatively reserved."
     ]
   },

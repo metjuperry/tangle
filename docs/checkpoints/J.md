@@ -12,6 +12,9 @@
 - The supplied brand mark appears beside the live 800-weight wordmark in both
   headers. Adaptive favicons, touch/home-screen icons and README branding use the
   supplied assets; the manifest does not add offline caching.
+- Settings shows one section at a time with a sidebar sitemap (a section picker
+  on mobile). Section links survive refresh/back; drafts persist across sections
+  and the fixed Save footer saves all setting changes together.
 - Ctrl+K/Cmd+K search brings a matching PR into view. Cards become compact below
   60% zoom and zones summarize below 35%; clicking a summary zooms into its repo.
 - Keyboard tying through a labelled pin button and card back; directional arrows
@@ -47,6 +50,9 @@ The complete fixture suite also covers authoring, receipt, sessions and evaluati
 After integrating the supplied brand assets, local validation passed all 100
 .NET tests and 45 browser tests, including exact served-asset comparisons,
 login/board wordmark typography and manifest metadata.
+Settings sitemap validation passed all 46 browser tests and 100 .NET tests,
+including draft retention, saving across sections, refresh/back navigation,
+mobile layout and desktop/mobile axe checks.
 No paid AI call or GitHub backlog action was performed for this milestone.
 
 All nodes remain mounted so off-screen cards can participate in keyboard

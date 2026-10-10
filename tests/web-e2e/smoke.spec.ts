@@ -154,6 +154,7 @@ test('branch chain is ordered without internal yarn clutter and every PR opens',
 })
 test('settings persists bot logins and removed debug path is gone', async ({ page }) => {
   await unlock(page, '/settings')
+  await page.getByRole('link', { name: 'Bot detection', exact: true }).click()
   await page.getByLabel('Bot logins (comma-separated)').fill('dependabot[bot], custom-bot')
   await page.getByRole('button', { name: 'Save settings' }).click()
   await expect(page.getByRole('status').filter({ hasText: 'Settings saved.' })).toBeVisible()

@@ -126,6 +126,20 @@ a { color: var(--yarn); }
 .settings-wrap:has(> .settings-page) { overflow: hidden; min-height: 0; }
 .settings-page { width: 100%; max-width: 1000px; height: 100%; min-height: 0; margin: 0 auto; padding: 0; border-radius: 6px; overflow: hidden; display: flex; flex-direction: column; }
 .settings-content { flex: 1; min-height: 0; overflow-y: auto; overscroll-behavior: contain; scroll-padding: 16px; }
+.settings-layout { display: flex; flex: 1; min-height: 0; border-top: 1px solid #d9cdb8; }
+.settings-sitemap { flex: 0 0 230px; padding: 16px; border-right: 1px solid #d9cdb8; background: #f1eadb; overflow-y: auto; }
+.settings-section-links { display: grid; gap: 6px; }
+.settings-section-links a { padding: 10px 12px; border-radius: 4px; color: var(--ink); text-decoration: none; font-size: 14px; }
+.settings-section-links a[aria-current] { background: var(--ink); color: var(--paper); font-weight: 700; }
+.settings-page .settings-section-picker { display: none; }
+.settings-content > .settings-section,.settings-content > div > .settings-section { border-top: 0; }
+.settings-content { min-width: 0; }
+@media(max-width: 650px) {
+  .settings-layout { flex-direction: column; }
+  .settings-sitemap { flex: none; padding: 12px 20px; border-right: 0; border-bottom: 1px solid #d9cdb8; }
+  .settings-section-links { display: none; }
+  .settings-page .settings-section-picker { display: grid; font-size: 12px; }
+}
 .settings-evaluate-link { display: inline-block; padding: 10px 16px; border: 1px solid var(--ink); border-radius: 5px; color: var(--ink); text-decoration: none; font-weight: 700; font-size: 14px; }
 .evaluation-page { max-width: 1000px; margin: auto; padding: 28px 32px; background: var(--paper); border-radius: 6px; box-shadow: 0 4px 12px #221c1540; }
 .evaluation-coverage { padding: 14px 16px; background: #eee5d4; border-left: 3px solid var(--mine-yarn); }

@@ -2,6 +2,7 @@
 
 | Date | Question | Answer |
 | --- | --- | --- |
+| 2026-10-11 | Settings should not require scrolling between sections. | Show one section at a time through a sidebar sitemap, with a mobile section picker and hash links for refresh/back. Keep sections mounted so drafts and newly generated personal keys survive switching. Save applies all settings together; personal-key actions remain immediate. Long lists can scroll within the selected section. |
 | 2026-10-10 | There is no Git repository or remote. | Initialize a local repository, preserve the supplied docs on `main`, and use `milestone/m0` and `milestone/m1`. Do not create a remote repository without a destination. PR creation and remote CI are blocked until a remote is supplied. |
 | 2026-10-10 | How does a browser supply the local development key? | A same-origin login form exchanges the key for an HttpOnly, SameSite=Strict cookie. API clients may also use a Bearer key. Check Host and Origin before authentication; never put the key in a URL or browser storage. Only the login shell and liveness probe are public. |
 | 2026-10-10 | The schema omits watched organizations, reviewer identity and commit authors needed by later rules. | Add an `organization` settings table, `pr_review_request` cache table, and keep typed event details as JSON in `pr_event.detail`. Include the documented `ai_call` log. No facts or AI behavior is implemented before its milestone. |

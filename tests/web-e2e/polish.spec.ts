@@ -4,6 +4,46 @@ import { packLanes, stackSize } from '../../web/src/board/packing'
 import { readFile } from 'node:fs/promises'
 import { resolve } from 'node:path'
 
+test('settings sitemap switches isolated sections without losing drafts and supports history and mobile', async ({ page }) => {
+  await page.goto('/settings')
+  await page.getByLabel('Development key').fill('tangle-browser-test-key-not-a-secret')
+  await page.getByRole('button', { name: 'Unlock Tangle' }).click()
+  const nav = page.getByRole('navigation', { name: 'Settings sections' })
+  await expect(nav.getByRole('link')).toHaveCount(8)
+  await expect(nav.getByRole('link', { name: 'Watched owners', exact: true })).toHaveAttribute('aria-current', 'page')
+  await expect(page.getByRole('region', { name: 'Repositories', exact: true })).toBeHidden()
+  await page.getByLabel('Owner name', { exact: true }).fill('unsaved-owner')
+  await nav.getByRole('link', { name: 'AI privacy and budget', exact: true }).click()
+  await page.getByLabel('Monthly AI budget (USD)').fill('0.75')
+  await nav.getByRole('link', { name: 'Bot detection', exact: true }).click()
+  await page.getByLabel('Bot logins (comma-separated)').fill('local-test-bot')
+  await expect(page.getByRole('button', { name: 'Save settings', exact: true })).toBeInViewport()
+  await page.goBack()
+  await expect(page.getByLabel('Monthly AI budget (USD)')).toHaveValue('0.75')
+  await page.goBack()
+  await expect(page.getByLabel('Owner name', { exact: true })).toHaveValue('unsaved-owner')
+  await nav.getByRole('link', { name: 'AI jobs', exact: true }).click()
+  await page.getByRole('button', { name: 'Save settings', exact: true }).click()
+  await expect(page.getByRole('status').filter({ hasText: 'Settings saved.' })).toBeVisible()
+  await page.reload()
+  await expect(nav.getByRole('link', { name: 'AI jobs', exact: true })).toHaveAttribute('aria-current', 'page')
+  await nav.getByRole('link', { name: 'Bot detection', exact: true }).click()
+  await expect(page.getByLabel('Bot logins (comma-separated)')).toHaveValue('local-test-bot')
+  await nav.getByRole('link', { name: 'AI privacy and budget', exact: true }).click()
+  await expect(page.getByLabel('Monthly AI budget (USD)')).toHaveValue('0.75')
+  let result = await new AxeBuilder({ page }).withTags(['wcag2a', 'wcag2aa', 'wcag21aa']).analyze()
+  expect(result.violations).toEqual([])
+  await page.setViewportSize({ width: 390, height: 844 })
+  const picker = page.getByLabel('Settings section', { exact: true })
+  await expect(picker).toBeInViewport()
+  await picker.selectOption('safety')
+  await expect(page.getByRole('heading', { name: 'GitHub Apply safety', exact: true })).toBeInViewport()
+  await expect(page.getByRole('button', { name: 'Save settings', exact: true })).toBeInViewport()
+  expect(await page.evaluate(() => document.documentElement.scrollWidth <= window.innerWidth)).toBeTruthy()
+  result = await new AxeBuilder({ page }).withTags(['wcag2a', 'wcag2aa', 'wcag21aa']).analyze()
+  expect(result.violations).toEqual([])
+})
+
 test('supplied branding is served unchanged and used on login and board', async ({ page, request }) => {
   const assets = ['tangle-mark.svg', 'tangle-mark-on-dark.svg', 'favicon.svg', 'favicon-16.png',
     'favicon-32.png', 'apple-touch-icon.png', 'app-icon.svg', 'app-icon-512.png']
