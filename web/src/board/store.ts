@@ -16,7 +16,7 @@ export const useBoardUi = create<BoardUi>(set => ({
   selection: null, stringId: null, dimOthers: false, tieFrom: null, focusRef: null,
   focus: reference => set({ focusRef: reference, selection: reference, stringId: null }),
   startTie: reference => set({ tieFrom: reference }),
-  select: id => set({ selection: id, stringId: null }),
+  select: id => set({ selection: id, stringId: null, ...(id === null ? { focusRef: null } : {}) }),
   selectString: id => set({ stringId: id, selection: null }),
   toggleOthers: () => set(state => ({ dimOthers: !state.dimOthers })),
 }))

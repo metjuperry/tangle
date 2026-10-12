@@ -4,7 +4,7 @@
     "title": "Read the board",
     "paragraphs": [
       "Each repository has a zone, arranged in up to three rows with more columns to the right, and each PR is a pinned card. Orange means your turn, blue means waiting on others, and grey means nobody's turn. The text stamp also identifies the status. Paper yellows after 40 days open; staleness uses 21 days without human activity, not simply the PR's age.",
-      "Pick a card to read its description, computed facts, unresolved review asks, related PRs and sessions. Facts are deterministic; AI proposals do not change them. Dim others fades PRs authored by other people, not your own PRs waiting on a reviewer."
+      "Pick a card to read its description, computed facts, unresolved review asks, related PRs and sessions. Its strings are emphasized; unrelated yarn fades and its tags are hidden. Click empty cork or a repo zone to clear selection and restore all strings. Open PR on GitHub in the card details opens the pull request in a new tab. Facts are deterministic; AI proposals do not change them. Dim others fades PRs authored by other people, not your own PRs waiting on a reviewer."
     ]
   },
   {

@@ -102,8 +102,12 @@ function StickyNode({ data }: NodeProps<StickyNodeType>) {
 }
 function YarnEdge({ sourceX, sourceY, targetX, targetY, data }: EdgeProps<YarnLink>) {
   const select = useBoardUi(s => s.selectString)
+  const selection = useBoardUi(s => s.selection)
   const hidden = useStore(state => state.transform[2] < .35)
   if (!data || hidden) return null
+  const reference = selection?.startsWith('sticky:') ? selection : selection ? `pr:${selection}` : null
+  const connected = reference === data.yarn.aRef || reference === data.yarn.bRef
+  const opacity = reference && !connected ? .12 : 1
   const distance = Math.hypot(targetX - sourceX, targetY - sourceY)
   const cx = (sourceX + targetX) / 2
   const cy = (sourceY + targetY) / 2 + 30 + distance * .12
@@ -111,9 +115,10 @@ function YarnEdge({ sourceX, sourceY, targetX, targetY, data }: EdgeProps<YarnLi
   const mx = (sourceX + 2 * cx + targetX) / 4
   const my = (sourceY + 2 * cy + targetY) / 4
   const color = data.yarn.source === 'me' ? 'var(--mine-yarn)' : 'var(--yarn)'
-  return <><BaseEdge path={path} style={{ stroke: '#28140047', strokeWidth: 5, transform: 'translate(2px, 3px)' }} />
-    <BaseEdge path={path} style={{ stroke: color, strokeWidth: 3, strokeLinecap: 'round', strokeDasharray: data.yarn.status === 'suggested' ? '8 7' : undefined }} />
-    <EdgeLabelRenderer><button className="yarn-tag nodrag nopan" style={{ background: color, borderColor: color, transform: `translate(-50%, -50%) translate(${mx}px, ${my}px)` }}
+  return <><BaseEdge path={path} style={{ opacity, stroke: '#28140047', strokeWidth: connected ? 6 : 5, transform: 'translate(2px, 3px)' }} />
+    <BaseEdge path={path} style={{ opacity, stroke: color, strokeWidth: connected ? 4 : 3, strokeLinecap: 'round', strokeDasharray: data.yarn.status === 'suggested' ? '8 7' : undefined }} />
+    <EdgeLabelRenderer><button className="yarn-tag nodrag nopan" data-connection-focus={reference ? connected ? 'connected' : 'unrelated' : undefined}
+      style={{ visibility: reference && !connected ? 'hidden' : undefined, background: color, borderColor: color, transform: `translate(-50%, -50%) translate(${mx}px, ${my}px)` }}
       aria-label={`${data.yarn.status === 'suggested' ? 'Suggested' : data.yarn.source === 'me' ? 'Your' : 'Rule'} string: ${data.yarn.aRef.replace(/^pr:/, '')} and ${data.yarn.bRef.replace(/^pr:/, '')}`}
       title="Explain this connection"
       onClick={() => select(data.yarn.id)}>{data.yarn.status === 'suggested' ? '?' : data.yarn.source === 'me' ? '✎' : '✓'}</button></EdgeLabelRenderer></>
@@ -232,7 +237,8 @@ function BoardCanvas({ board }: { board: Board }) {
         `pr:${handle?.replace(/^pin-(?:in|out)-/, '') ?? id}`;
         tie.mutate({ aRef: ref(connection.source, connection.sourceHandle), bRef: ref(connection.target, connection.targetHandle) }) }}
       nodesConnectable elementsSelectable={false} panOnDrag zoomOnScroll
-      onNodeClick={(_, node) => { if (!tieFrom && node.type === 'sticky') select(node.id); else if (!tieFrom && node.type !== 'zone' && node.type !== 'stack') select((node.data as CardData).card.id) }}
+      onPaneClick={() => select(null)}
+      onNodeClick={(_, node) => { if (!tieFrom && node.type === 'zone') select(null); else if (!tieFrom && node.type === 'sticky') select(node.id); else if (!tieFrom && node.type !== 'zone' && node.type !== 'stack') select((node.data as CardData).card.id) }}
       proOptions={{ hideAttribution: false }}><Controls showInteractive={false} /></ReactFlow>
     <div className="board-legend"><span><i className="legend-pin me" />your turn</span><span><i className="legend-pin them" />waiting on others</span>
       <span><i className="legend-pin nobody" />nobody’s turn</span><span><i className="legend-yarn" />rule link · click its ✓ to read why</span><span>yellowed paper = open over 40 days</span></div>

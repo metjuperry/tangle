@@ -58,6 +58,46 @@ test('recent activity explains an unlinked commit author', async ({ page }) => {
   await page.getByRole('button', { name: /example\/repo #49,/ }).click()
   await expect(page.locator('.activity')).toContainText('Example Author (unlinked commit author)')
 })
+test('PR selection focuses exact connections, clears on cork and zones and opens GitHub in a new tab', async ({ page }) => {
+    await page.route('**/api/board', async route => {
+      const response = await route.fetch()
+      const board = await response.json()
+      board.strings = [
+        { id: 'selected-rule', aRef: 'pr:example/repo#49', bRef: 'pr:example/tools#195', source: 'rule', status: 'active' },
+        { id: 'selected-user', aRef: 'pr:example/templates#199', bRef: 'pr:example/repo#49', source: 'me', status: 'active' },
+        { id: 'unrelated-ai', aRef: 'pr:example/tools#196', bRef: 'pr:example/templates#200', source: 'ai', status: 'suggested' },
+      ]
+      await route.fulfill({ json: board })
+    })
+    await unlock(page)
+    const card = page.getByRole('button', { name: /example\/repo #49,/ })
+    await card.click()
+    await expect(page.locator('.yarn-tag[data-connection-focus="connected"]')).toHaveCount(2)
+    const unrelated = page.locator('.yarn-tag[data-connection-focus="unrelated"]')
+    await expect(unrelated).toBeHidden()
+    await expect(page.locator('.react-flow__edge[data-id="unrelated-ai"] path').first()).toHaveCSS('opacity', '0.12')
+    await page.getByLabel('Add a note').click()
+    await expect(page.locator('.pr-card.selected')).toHaveCount(1)
+    const link = page.getByRole('link', { name: 'Open PR on GitHub (opens in a new tab)', exact: true })
+    await expect(link).toHaveAttribute('href', 'https://github.com/example/repo/pull/49')
+    await expect(link).toHaveAttribute('target', '_blank')
+    await expect(link).toHaveAttribute('rel', 'noopener noreferrer')
+    await page.context().route('https://github.com/**', route => route.fulfill({ body: '<h1>GitHub fixture</h1>', contentType: 'text/html' }))
+    const popup = page.waitForEvent('popup')
+    await link.click()
+    const github = await popup
+    await github.waitForLoadState()
+    expect(github.url()).toBe('https://github.com/example/repo/pull/49')
+    await github.close()
+    await page.locator('.react-flow__pane').click({ position: { x: 15, y: 200 } })
+    await expect(page.locator('.pr-card.selected')).toHaveCount(0)
+    await expect(page.getByRole('heading', { name: 'Follow a string.' })).toBeVisible()
+    await expect(page.locator('.yarn-tag[data-connection-focus]')).toHaveCount(0)
+    await card.click()
+    await page.locator('.repo-zone').first().click({ position: { x: 10, y: 40 } })
+    await expect(page.locator('.pr-card.selected')).toHaveCount(0)
+    await expect(page.locator('.yarn-tag[data-connection-focus]')).toHaveCount(0)
+  })
 test('red string tag opens connection explanation by pointer and keyboard', async ({ page }) => {
   await unlock(page)
   const tag = page.getByRole('button', { name: 'Rule string: example/repo#49 and example/tools#195' })
