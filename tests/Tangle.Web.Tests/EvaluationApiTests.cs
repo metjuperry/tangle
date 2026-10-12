@@ -14,10 +14,11 @@ public sealed class EvaluationApiTests
     public async Task ReportUsesHistoricPreDecisionJudgmentAndNeverCallsProvider()
     {
         using var factory = new TangleFactory();
+        using var scope = factory.Services.CreateScope();
         using var client = factory.LocalClient();
         Assert.Equal(HttpStatusCode.Unauthorized, (await client.GetAsync("/api/evaluation")).StatusCode);
         client.DefaultRequestHeaders.Authorization = new("Bearer", TangleFactory.Key);
-        await using var db = await factory.Services.GetRequiredService<Database>().OpenAsync();
+        await using var db = await scope.ServiceProvider.GetRequiredService<Database>().OpenAsync();
         await db.ExecuteAsync("""
             INSERT INTO repo(id) VALUES('example/repo');
             INSERT INTO pr(id,repo_id,number) VALUES('example/repo#1','example/repo',1);

@@ -74,7 +74,7 @@ public static partial class SyncEndpoints
             context.Response.Headers["X-Accel-Buffering"] = "no";
             return Results.ServerSentEvents(events.Subscribe(value.Length == 0 ? null : long.Parse(value), context.RequestAborted));
         });
-        api.MapGet("/ai/status", async (Tangle.Data.Database database, Microsoft.Extensions.Configuration.IConfiguration config, CancellationToken ct) =>
+        api.MapGet("/ai/status", async (Tangle.Data.Database database, Microsoft.Extensions.Configuration.IConfiguration config, IUserContext user, CancellationToken ct) =>
         {
             await using var db = await database.OpenAsync(ct);
             var calls = await Dapper.SqlMapper.QueryAsync(db, new Dapper.CommandDefinition(
@@ -83,7 +83,8 @@ public static partial class SyncEndpoints
                   status,error,created_at AS createdAt,job,targets,outcome,pr_id AS prId,reserved_cost AS reservedCost
                 FROM ai_call ORDER BY created_at DESC LIMIT 50
                 """, cancellationToken: ct));
-            return Results.Ok(new { enabled = config.GetValue<bool>("Ai:Enabled"), jevEnabled = config.GetValue<bool>("Ai:JevEnabled"), calls });
+            return Results.Ok(new { enabled = user.UserId == "local" && config.GetValue<bool>("Ai:Enabled"),
+                jevEnabled = user.UserId == "local" && config.GetValue<bool>("Ai:JevEnabled"), calls });
         });
     }
 }

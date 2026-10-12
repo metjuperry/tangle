@@ -63,6 +63,8 @@ public sealed class HostTests(TangleFactory factory) : IClassFixture<TangleFacto
             builder.ConfigureServices(services => services.AddTransient<IStartupFilter, TrustedIngressFilter>());
         });
         using var client = hosted.CreateClient(new() { BaseAddress = new Uri("https://tangle.example") });
+        await using (var control = await hosted.Services.GetRequiredService<ControlDatabase>().OpenAsync())
+            await Dapper.SqlMapper.ExecuteAsync(control, "INSERT INTO user(id,github_id,login,created_at,last_seen_at) VALUES('100',100,'allowed','now','now')");
         client.DefaultRequestHeaders.Add("X-MS-CLIENT-PRINCIPAL-NAME", "allowed");
         Assert.Equal(HttpStatusCode.Unauthorized, (await client.GetAsync("/api/auth")).StatusCode);
         client.DefaultRequestHeaders.Add("X-Test-Trusted-Ingress", "true");
@@ -154,9 +156,10 @@ public sealed class HostTests(TangleFactory factory) : IClassFixture<TangleFacto
     public async Task BoardAndCardContextExposeFactsBatchesAndStrings()
     {
         using var isolated = new TangleFactory();
+        using var scope = isolated.Services.CreateScope();
         using var client = isolated.LocalClient();
         client.DefaultRequestHeaders.Authorization = new("Bearer", TangleFactory.Key);
-        var store = isolated.Services.GetRequiredService<SyncStore>();
+        var store = scope.ServiceProvider.GetRequiredService<SyncStore>();
         var prs = Enumerable.Range(1, 5).Select(n => new PullRequest(
             $"fixture/repo#{n}", "fixture/repo", n, $"feat: scaffold applier for pp-{n}", n == 1 ? "#2" : "",
             "viewer", true, "OPEN", false, $"feature-{n}", "main", "2026-10-01T00:00:00Z",

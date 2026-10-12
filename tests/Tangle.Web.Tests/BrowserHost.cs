@@ -23,7 +23,8 @@ public static class BrowserHost
         using var factory = new BrowserFactory();
         factory.UseKestrel(5203);
         using var client = factory.CreateClient();
-        var store = factory.Services.GetRequiredService<SyncStore>();
+        using var scope = factory.Services.CreateScope();
+        var store = scope.ServiceProvider.GetRequiredService<SyncStore>();
         var fixture = File.ReadAllText(Path.Combine(AppContext.BaseDirectory, "fixtures", "github-pr-page.json"));
         var github = new GitHubReader(new HttpClient(new FixtureHandler(fixture)),
             new GitHubTokens(new ConfigurationBuilder().AddInMemoryCollection(

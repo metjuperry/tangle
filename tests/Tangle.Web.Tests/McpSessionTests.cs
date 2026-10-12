@@ -14,7 +14,8 @@ public sealed class McpSessionTests
 {
     private static async Task Seed(TangleFactory factory)
     {
-        var store = factory.Services.GetRequiredService<SyncStore>();
+        using var scope = factory.Services.CreateScope();
+        var store = scope.ServiceProvider.GetRequiredService<SyncStore>();
         var prs = Enumerable.Range(1, 2).Select(n => new PullRequest($"example/repo#{n}", "example/repo", n, "Fixture", "",
             "viewer", true, "OPEN", false, $"feature-{n}", "main", "2026-10-01T00:00:00Z",
             "2026-10-10T00:00:00Z", null, 1, 0, 0, "MERGEABLE", null, null, [], [], [], [], $"hash-{n}", "viewer")).ToArray();
@@ -24,6 +25,7 @@ public sealed class McpSessionTests
     public async Task PersonalKeysAreScopedHashedAndRevocableAndSessionMatches()
     {
         using var factory = new TangleFactory();
+        using var scope = factory.Services.CreateScope();
         using var browser = factory.LocalClient();
         browser.DefaultRequestHeaders.Authorization = new("Bearer", TangleFactory.Key);
         await Seed(factory);
@@ -36,14 +38,15 @@ public sealed class McpSessionTests
         Assert.Equal(HttpStatusCode.Forbidden, (await agent.PostAsJsonAsync("/api/actions/missing/apply", new { confirmed = true })).StatusCode);
         Assert.Equal(HttpStatusCode.Forbidden, (await agent.GetAsync("/api/settings")).StatusCode);
         Assert.Equal(HttpStatusCode.OK, (await agent.PostAsJsonAsync("/api/sessions", report)).StatusCode);
-        var info = (await factory.Services.GetRequiredService<SessionService>().ListAsync(default)).Single();
+        var info = (await scope.ServiceProvider.GetRequiredService<SessionService>().ListAsync(default)).Single();
         Assert.Equal("example/repo#1", info.PrId);
         Assert.Equal("branch", info.MatchedBy);
-        await factory.Services.GetRequiredService<SessionService>().AttachAsync(info.Id, "example/repo#2", default);
+        await scope.ServiceProvider.GetRequiredService<SessionService>().AttachAsync(info.Id, "example/repo#2", default);
         await agent.PostAsJsonAsync("/api/sessions", report);
-        Assert.Equal("example/repo#2", (await factory.Services.GetRequiredService<SessionService>().ListAsync(default)).Single().PrId);
-        await using var db = await factory.Services.GetRequiredService<Database>().OpenAsync();
-        Assert.NotEqual(created.Key, await db.ExecuteScalarAsync<string>("SELECT key_hash FROM personal_key"));
+        Assert.Equal("example/repo#2", (await scope.ServiceProvider.GetRequiredService<SessionService>().ListAsync(default)).Single().PrId);
+        await using var db = await scope.ServiceProvider.GetRequiredService<Database>().OpenAsync();
+        await using var control = await scope.ServiceProvider.GetRequiredService<ControlDatabase>().OpenAsync();
+        Assert.NotEqual(created.Key, await control.ExecuteScalarAsync<string>("SELECT key_hash FROM personal_key"));
         await browser.DeleteAsync($"/api/keys/{created.Id}");
         Assert.Equal(HttpStatusCode.Unauthorized, (await agent.PostAsJsonAsync("/api/sessions", report)).StatusCode);
     }
@@ -51,9 +54,10 @@ public sealed class McpSessionTests
     public async Task McpHttpListsOnlyEightProposalSafeToolsAndCallsReadAndWrite()
     {
         using var factory = new TangleFactory();
+        using var scope = factory.Services.CreateScope();
         using var browser = factory.LocalClient();
         await Seed(factory);
-        var created = await factory.Services.GetRequiredService<PersonalKeys>().CreateAsync("MCP", default);
+        var created = await scope.ServiceProvider.GetRequiredService<PersonalKeys>().CreateAsync("MCP", default);
         browser.DefaultRequestHeaders.Authorization = new("Bearer", created.Key);
         browser.DefaultRequestHeaders.Accept.ParseAdd("application/json");
         browser.DefaultRequestHeaders.Accept.ParseAdd("text/event-stream");
@@ -85,11 +89,12 @@ public sealed class McpSessionTests
     public async Task TrailerMatchingAndAmbiguousBranchesPreserveManualChoice()
     {
         using var factory = new TangleFactory();
+        using var scope = factory.Services.CreateScope();
         using var client = factory.LocalClient();
         await Seed(factory);
-        await using var db = await factory.Services.GetRequiredService<Database>().OpenAsync();
+        await using var db = await scope.ServiceProvider.GetRequiredService<Database>().OpenAsync();
         await db.ExecuteAsync("UPDATE pr SET body='Claude-Session: cloud-fixture' WHERE id='example/repo#1'");
-        var sessions = factory.Services.GetRequiredService<SessionService>();
+        var sessions = scope.ServiceProvider.GetRequiredService<SessionService>();
         await sessions.MatchAsync(default);
         Assert.Equal("trailer", (await sessions.ListAsync(default)).Single().MatchedBy);
         await sessions.AttachAsync("cloud-fixture", "example/repo#2", default);
@@ -103,9 +108,10 @@ public sealed class McpSessionTests
     public async Task EachToolUsesSharedFixtureStoreAndPreservesCuts()
     {
         using var factory = new TangleFactory();
+        using var scope = factory.Services.CreateScope();
         using var client = factory.LocalClient();
         await Seed(factory);
-        var tools = ActivatorUtilities.CreateInstance<TangleTools>(factory.Services);
+        var tools = ActivatorUtilities.CreateInstance<TangleTools>(scope.ServiceProvider);
         Assert.Contains("example/repo#1", await tools.ListPrs(default));
         Assert.Contains("Fixture", await tools.GetPrContext("example/repo#1", default));
         Assert.Contains("prs", await tools.GetThreads(default));
@@ -113,14 +119,14 @@ public sealed class McpSessionTests
         var note = await tools.AddNote("pr:example/repo#1", "note", default);
         Assert.Contains("note", note);
         await tools.ProposeLink("pr:example/repo#1", "pr:example/repo#2", "Shared work", default);
-        var sync = factory.Services.GetRequiredService<SyncStore>();
+        var sync = scope.ServiceProvider.GetRequiredService<SyncStore>();
         var link = Assert.Single(await sync.GetStringsAsync());
         Assert.Equal("suggested", link.Status);
-        await factory.Services.GetRequiredService<AuthoringStore>().ChangeLinkAsync(link.Id, "cut", null, default);
+        await scope.ServiceProvider.GetRequiredService<AuthoringStore>().ChangeLinkAsync(link.Id, "cut", null, default);
         await Assert.ThrowsAsync<InvalidOperationException>(() => tools.ProposeLink(link.ARef, link.BRef, "Again", default));
         await tools.RecordVerdict("example/repo#1", "fix", .9, 4, "Review asks", "Intent", default);
         Assert.Equal("fix", (await sync.GetBoardAsync()).First().Verdict!.Action);
         await tools.QueueAction("example/repo#1", "comment", "Draft only", null, default);
-        Assert.Equal("queued", (await factory.Services.GetRequiredService<ActionStore>().ListAsync(default)).Single().Status);
+        Assert.Equal("queued", (await scope.ServiceProvider.GetRequiredService<ActionStore>().ListAsync(default)).Single().Status);
     }
 }

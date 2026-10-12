@@ -50,13 +50,14 @@ public sealed class EventTests
     public async Task EventEndpointValidatesReconnectAndStreamsReplay()
     {
         using var factory = new TangleFactory();
+        using var scope = factory.Services.CreateScope();
         using var client = factory.LocalClient();
         client.DefaultRequestHeaders.Authorization = new("Bearer", TangleFactory.Key);
         client.DefaultRequestHeaders.Add("Last-Event-ID", "invalid");
         Assert.Equal(HttpStatusCode.BadRequest, (await client.GetAsync("/api/events")).StatusCode);
         client.DefaultRequestHeaders.Remove("Last-Event-ID");
         client.DefaultRequestHeaders.Add("Last-Event-ID", "0");
-        var hub = factory.Services.GetRequiredService<EventHub>();
+        var hub = scope.ServiceProvider.GetRequiredService<EventHub>();
         hub.Publish("prs.changed", new { ids = new[] { "fixture/repo#1" } });
         using var ct = new CancellationTokenSource(TimeSpan.FromSeconds(3));
         using var response = await client.GetAsync("/api/events", HttpCompletionOption.ResponseHeadersRead, ct.Token);

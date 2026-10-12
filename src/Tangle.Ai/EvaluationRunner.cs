@@ -11,9 +11,9 @@ public sealed record EvalDisagreement(string Target, string Expected, string Pre
 public sealed record EvaluationReport(int LabelledExamples, int Needed, int ExcludedSnoozes,
     int ReplayableExamples, IReadOnlyList<DeciderStats> Stats, string Markdown);
 
-public sealed class EvaluationRunner(IEvaluationStore store, IAiStore aiStore, DeciderRegistry registry) : IEvaluationReports
+public sealed class EvaluationRunner(IEvaluationStore store, IAiStore aiStore, DeciderRegistry registry, SemaphoreSlim? gate = null) : IEvaluationReports
 {
-    private readonly SemaphoreSlim replayGate = new(1, 1);
+    private readonly SemaphoreSlim replayGate = gate ?? new(1, 1);
     public async Task<object> GetAsync(CancellationToken ct) => await ReportAsync(ct);
     public async Task<string> MarkdownAsync(CancellationToken ct) => (await ReportAsync(ct)).Markdown;
     public async Task<EvaluationReport> ReportAsync(CancellationToken ct) => Compute(await store.ReadAsync(ct));

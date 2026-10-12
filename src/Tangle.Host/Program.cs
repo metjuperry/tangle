@@ -6,6 +6,7 @@ using Tangle.Ai;
 using Anthropic;
 using Tangle.Mcp;
 using Tangle.Sessions;
+using Tangle.Host;
 
 var builder = WebApplication.CreateBuilder(args);
 builder.WebHost.UseUrls(builder.Configuration["Tangle:Address"] ?? new RuntimeSettings().Address);
@@ -32,23 +33,24 @@ builder.Services.AddSingleton(services =>
         throw new InvalidOperationException("Set Tangle:DevelopmentKey in user-secrets or Tangle__DevelopmentKey to at least 32 characters.");
     return settings;
 });
-builder.Services.AddSingleton(services => new Database(services.GetRequiredService<RuntimeSettings>().DatabasePath));
+builder.Services.AddUserData();
 builder.Services.AddLocalAuthentication();
 builder.Services.AddSingleton<TimeProvider>(TimeProvider.System);
-builder.Services.AddSingleton<SyncStore>();
-builder.Services.AddSingleton<AuthoringStore>();
-builder.Services.AddSingleton<ActionStore>();
-builder.Services.AddSingleton<ActionQueue>();
-builder.Services.AddSingleton<PersonalKeys>();
-builder.Services.AddSingleton<SessionService>();
+builder.Services.AddScoped<SyncStore>();
+builder.Services.AddScoped<AuthoringStore>();
+builder.Services.AddScoped<ActionStore>();
+builder.Services.AddScoped<ActionQueue>();
+builder.Services.AddScoped<PersonalKeys>();
+builder.Services.AddScoped<SessionService>();
 builder.Services.AddTangleMcp();
-builder.Services.AddSingleton<IAiStore, AiStore>();
-builder.Services.AddSingleton<IEvaluationStore, EvaluationStore>();
-builder.Services.AddSingleton<IExplanationStore, ExplanationStore>();
-builder.Services.AddSingleton<IExplanationService, ExplanationService>();
-builder.Services.AddSingleton<DeciderRegistry>();
-builder.Services.AddSingleton<EvaluationRunner>();
-builder.Services.AddSingleton<IEvaluationReports>(s => s.GetRequiredService<EvaluationRunner>());
+builder.Services.AddScoped<IAiStore, AiStore>();
+builder.Services.AddScoped<IEvaluationStore, EvaluationStore>();
+builder.Services.AddScoped<IExplanationStore, ExplanationStore>();
+builder.Services.AddScoped<IExplanationService, ExplanationService>();
+builder.Services.AddScoped<DeciderRegistry>();
+builder.Services.AddScoped(s => new EvaluationRunner(s.GetRequiredService<IEvaluationStore>(), s.GetRequiredService<IAiStore>(),
+    s.GetRequiredService<DeciderRegistry>(), s.GetRequiredService<UserResources>().Replay(s.GetRequiredService<IUserContext>().UserId)));
+builder.Services.AddScoped<IEvaluationReports>(s => s.GetRequiredService<EvaluationRunner>());
 builder.Services.AddSingleton(s => new JevDecider(new HttpClient(), s.GetRequiredService<IConfiguration>()["TYPESAFE_API_KEY"] ?? ""));
 builder.Services.AddSingleton(services =>
 {
@@ -58,24 +60,28 @@ builder.Services.AddSingleton(services =>
         throw new InvalidOperationException("Ai:Enabled requires ANTHROPIC_API_KEY in environment or Host user-secrets.");
     return new HaikuDecider(new AnthropicClient { ApiKey = key ?? "", MaxRetries = 0 });
 });
-builder.Services.AddSingleton(services => new AiWorker(services.GetRequiredService<IAiStore>(),
+builder.Services.AddScoped(services => new AiWorker(services.GetRequiredService<IAiStore>(),
     services.GetRequiredService<HaikuDecider>(), services.GetRequiredService<ILiveEvents>(),
-    services.GetRequiredService<ILogger<AiWorker>>(), builder.Configuration.GetValue<bool>("Ai:Enabled"),
+    services.GetRequiredService<ILogger<AiWorker>>(), builder.Configuration.GetValue<bool>("Ai:Enabled")
+        && services.GetRequiredService<IUserContext>().UserId == "local",
     services.GetRequiredService<DeciderRegistry>()));
-builder.Services.AddSingleton<IAiQueue>(s => s.GetRequiredService<AiWorker>());
-builder.Services.AddHostedService(s => s.GetRequiredService<AiWorker>());
-builder.Services.AddSingleton<ISyncStore>(services => services.GetRequiredService<SyncStore>());
-builder.Services.AddSingleton<GitHubTokens>();
+builder.Services.AddSingleton<UserAiQueue>();
+builder.Services.AddHostedService(s => s.GetRequiredService<UserAiQueue>());
+builder.Services.AddScoped<IAiQueue, ScopedAiQueue>();
+builder.Services.AddScoped<ISyncStore>(services => services.GetRequiredService<SyncStore>());
+builder.Services.AddScoped(s => new GitHubTokens(s.GetRequiredService<IConfiguration>(),
+    () => s.GetRequiredService<IUserContext>().UserId == "local"));
 builder.Services.AddHttpClient<IGitHubReader, GitHubReader>();
 builder.Services.AddHttpClient<IGitHubActions, GitHubActions>();
-builder.Services.AddSingleton<SyncService>();
-builder.Services.AddSingleton<EventHub>();
-builder.Services.AddSingleton<ILiveEvents>(services => services.GetRequiredService<EventHub>());
+builder.Services.AddScoped(s => new SyncService(s.GetRequiredService<IGitHubReader>(), s.GetRequiredService<ISyncStore>(),
+    s.GetRequiredService<TimeProvider>(), s.GetRequiredService<ILiveEvents>(), s.GetRequiredService<IAiQueue>(),
+    s.GetRequiredService<UserResources>().Sync(s.GetRequiredService<IUserContext>().UserId)));
 var app = builder.Build();
-var applied = await app.Services.GetRequiredService<Database>().MigrateAsync();
-app.Logger.LogInformation("Applied {Count} database migrations", applied);
-await app.Services.GetRequiredService<SyncStore>().RecomputeAsync();
-await app.Services.GetRequiredService<SessionService>().MatchAsync(CancellationToken.None);
+await app.Services.GetRequiredService<ControlDatabase>().MigrateAsync();
+await app.Services.GetRequiredService<ControlDatabase>().EnsureLocalAsync();
+await app.Services.GetRequiredService<UserDatabases>().OpenAsync("local");
+using (var scope = app.Services.CreateScope())
+    await scope.ServiceProvider.GetRequiredService<SessionService>().MatchAsync(CancellationToken.None);
 app.UseLocalAuthentication(app.Services.GetRequiredService<RuntimeSettings>());
 app.MapGet("/healthz", () => Results.Ok(new { status = "ok" }));
 app.MapSyncEndpoints();

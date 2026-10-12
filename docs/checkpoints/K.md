@@ -1,6 +1,6 @@
 # Checkpoint K — GitHub sign-in decisions
 
-2026-10-12. **Stopped at G0; G1 has not started.**
+2026-10-12. **Subsequently advanced by Metju's autonomous-implementation instruction.**
 
 ## Prepared
 
@@ -15,8 +15,8 @@ were inspected, no real sign-in was attempted, and no database was modified.
 
 ## Decisions needed before G1
 
-The user was unavailable for the checkpoint questions. These recommendations
-remain **unconfirmed**, not implemented defaults:
+The user initially was unavailable for checkpoint questions, then explicitly
+requested autonomous implementation and reasonable decisions. Adopted:
 
 | Decision | Recommendation to confirm |
 | --- | --- |
@@ -40,7 +40,7 @@ Issues #11–#14 and #16 are still open. The supplied plan requires them to be
 merged before G1. Confirm whether the agent should implement those in separate
 PRs or wait for them to be handled elsewhere.
 
-There is no new runtime behavior to try at K. Once decisions are confirmed and
-prerequisites are merged, G1 gets its own branch/PR and stops at checkpoint L
+There is no new runtime behavior to try at K. Prerequisite fixes are in PR #29;
+G1 has its own dependent branch/PR and stops at checkpoint L
 for a normal local-mode board review. GitHub sign-in itself belongs to G2 and
 its first real sign-in remains checkpoint M.
