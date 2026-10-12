@@ -14,15 +14,16 @@ public sealed class AuthoringTests
     public async Task LabelEditsAndRepeatedDecisionsPreserveDecisionTime()
     {
         using var factory = new TangleFactory();
+        using var scope = factory.Services.CreateScope();
         _ = factory.LocalClient();
-        var sync = factory.Services.GetRequiredService<SyncStore>();
+        var sync = scope.ServiceProvider.GetRequiredService<SyncStore>();
         await sync.SaveScopeAsync("scope", [new PullRequest() { Id = "example/repo#1", RepoId = "example/repo",
             Number = 1, State = "OPEN", CreatedAt = "2026-10-01T00:00:00Z", UpdatedAt = "2026-10-09T00:00:00Z",
             ContentHash = "fixture", HeadRef = "feature", BaseRef = "main", Viewer = "viewer" }], "now", default);
-        var store = factory.Services.GetRequiredService<AuthoringStore>();
+        var store = scope.ServiceProvider.GetRequiredService<AuthoringStore>();
         var sticky = await store.SaveStickyAsync(null, "Release", "blue", false, default);
         var link = await store.TieAsync("pr:example/repo#1", $"sticky:{sticky.Id}", null, default);
-        await using var db = await factory.Services.GetRequiredService<Database>().OpenAsync();
+        await using var db = await scope.ServiceProvider.GetRequiredService<Database>().OpenAsync();
         await db.ExecuteAsync("UPDATE link SET decided_at='original' WHERE id=@id", new { id = link.Id });
         await store.ChangeLinkAsync(link.Id, null, "new label", default);
         await store.ChangeLinkAsync(link.Id, "tied", null, default);
@@ -37,9 +38,10 @@ public sealed class AuthoringTests
     public async Task AuthoringRoundTripSurvivesSyncAndReportsStickyMergedProgress()
     {
         using var factory = new TangleFactory();
+        using var scope = factory.Services.CreateScope();
         using var client = factory.LocalClient();
         client.DefaultRequestHeaders.Authorization = new("Bearer", TangleFactory.Key);
-        var store = factory.Services.GetRequiredService<SyncStore>();
+        var store = scope.ServiceProvider.GetRequiredService<SyncStore>();
         PullRequest Pr(int n, string state = "OPEN") => new($"example/repo#{n}", "example/repo", n,
             "Fixture", "", "viewer", true, state, false, $"feature-{n}", "main", "2026-10-01T00:00:00Z",
             "2026-10-09T00:00:00Z", null, 1, 0, 0, "MERGEABLE", null, null, [], [], [], [], state, "viewer");
@@ -81,6 +83,7 @@ public sealed class AuthoringTests
     public async Task WritesRejectMissingAuthInvalidReferencesAndInvalidColors()
     {
         using var factory = new TangleFactory();
+        using var scope = factory.Services.CreateScope();
         using var client = factory.LocalClient();
         Assert.Equal(HttpStatusCode.Unauthorized, (await client.PostAsJsonAsync("/api/notes", new { targetRef = "pr:missing", text = "note" })).StatusCode);
         client.DefaultRequestHeaders.Authorization = new("Bearer", TangleFactory.Key);

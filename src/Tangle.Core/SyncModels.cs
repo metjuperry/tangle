@@ -76,9 +76,10 @@ public interface ISyncStore
 }
 public sealed record SyncResult(int Fetched, int Changed, int Calls, int Cost);
 
-public sealed class SyncService(IGitHubReader github, ISyncStore store, TimeProvider clock, ILiveEvents? events = null, IAiQueue? ai = null)
+public sealed class SyncService(IGitHubReader github, ISyncStore store, TimeProvider clock, ILiveEvents? events = null, IAiQueue? ai = null,
+    SemaphoreSlim? syncGate = null)
 {
-    private readonly SemaphoreSlim gate = new(1, 1);
+    private readonly SemaphoreSlim gate = syncGate ?? new(1, 1);
     public async Task<SyncResult> RunAsync(CancellationToken ct)
     {
         if (!await gate.WaitAsync(0, ct)) throw new SyncInProgressException();

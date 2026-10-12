@@ -61,14 +61,15 @@ public static class LocalAuthentication
                 context.Request.Path == "/api/sessions" && HttpMethods.IsPost(context.Request.Method);
             if (personalRoute)
             {
-                if (!bearer.StartsWith("Bearer ", StringComparison.Ordinal) ||
-                    !await context.RequestServices.GetRequiredService<PersonalKeys>().ValidAsync(bearer[7..], context.RequestAborted))
+                var userId = bearer.StartsWith("Bearer ", StringComparison.Ordinal)
+                    ? await PersonalKeys.ResolveAsync(context.RequestServices.GetRequiredService<ControlDatabase>(), bearer[7..], context.RequestAborted) : null;
+                if (userId is null)
                 {
                     context.Response.StatusCode = 401;
                     await context.Response.WriteAsJsonAsync(new { error = "An active personal key is required." });
                     return;
                 }
-                context.User = Principal();
+                context.User = Principal(userId);
             }
             else if (bearer.StartsWith("Bearer tangle_", StringComparison.Ordinal))
             {
@@ -87,6 +88,20 @@ public static class LocalAuthentication
             }
             if (auth.Mode == "Local" && bearer.StartsWith("Bearer ", StringComparison.Ordinal) && Matches(bearer[7..], settings.DevelopmentKey))
                 context.User = Principal();
+            if (context.User.Identity?.IsAuthenticated == true)
+            {
+                var control = context.RequestServices.GetRequiredService<ControlDatabase>();
+                var id = personalRoute ? context.User.Identity.Name! : auth.Mode == "Local" ? "local" :
+                    await control.FindLoginAsync(context.User.Identity.Name!, context.RequestAborted);
+                if (id is null || !await control.ActiveAsync(id, context.RequestAborted))
+                {
+                    context.Response.StatusCode = 401;
+                    await context.Response.WriteAsJsonAsync(new { error = "User is disabled or missing." });
+                    return;
+                }
+                await context.RequestServices.GetRequiredService<UserDatabases>().OpenAsync(id, context.RequestAborted);
+                context.RequestServices.GetRequiredService<UserContext>().Set(id, context.User.Identity.Name!);
+            }
             await next(context);
         });
         app.UseAuthorization();

@@ -21,15 +21,16 @@ public sealed class ActionTests
             { ["Apply:Enabled"] = "true", ["Apply:SandboxRepo"] = "fixture/sandbox" }));
             builder.ConfigureServices(services => { services.RemoveAll<IGitHubActions>(); services.AddSingleton<IGitHubActions>(new FakeActions()); });
         });
+        using var scope = factory.Services.CreateScope();
         using var client = factory.CreateClient(new() { BaseAddress = new Uri("http://127.0.0.1:5202") });
         client.DefaultRequestHeaders.Authorization = new("Bearer", TangleFactory.Key);
-        var store = factory.Services.GetRequiredService<ActionStore>();
-        await Seed(store, factory.Services.GetRequiredService<SyncStore>());
+        var store = scope.ServiceProvider.GetRequiredService<ActionStore>();
+        await Seed(store, scope.ServiceProvider.GetRequiredService<SyncStore>());
         var action = await store.QueueAsync("fixture/sandbox#1", "comment", "{invalid", default);
         Assert.Equal(HttpStatusCode.BadGateway, (await client.PostAsJsonAsync($"/api/actions/{action.Id}/apply", new { confirmed = true })).StatusCode);
         Assert.Equal("failed", (await store.GetAsync(action.Id, default))!.Status);
         using var timeout = new CancellationTokenSource(TimeSpan.FromSeconds(5));
-        await using var events = factory.Services.GetRequiredService<Tangle.Web.EventHub>().Subscribe(0, timeout.Token).GetAsyncEnumerator();
+        await using var events = scope.ServiceProvider.GetRequiredService<Tangle.Web.EventHub>().Subscribe(0, timeout.Token).GetAsyncEnumerator();
         var count = 0;
         while (count < 2)
         {
@@ -55,10 +56,11 @@ public sealed class ActionTests
             { ["Apply:Enabled"] = "true", ["Apply:SandboxRepo"] = "fixture/sandbox" }));
             builder.ConfigureServices(services => { services.RemoveAll<IGitHubActions>(); services.AddSingleton<IGitHubActions>(github); });
         });
+        using var scope = factory.Services.CreateScope();
         using var client = factory.CreateClient(new() { BaseAddress = new Uri("http://127.0.0.1:5202") });
         client.DefaultRequestHeaders.Authorization = new("Bearer", TangleFactory.Key);
-        var store = factory.Services.GetRequiredService<ActionStore>();
-        await Seed(store, factory.Services.GetRequiredService<SyncStore>());
+        var store = scope.ServiceProvider.GetRequiredService<ActionStore>();
+        await Seed(store, scope.ServiceProvider.GetRequiredService<SyncStore>());
         var action = await store.QueueAsync("fixture/sandbox#1", "comment", System.Text.Json.JsonSerializer.Serialize(new ActionPayload("Exact text")), default);
         await store.DecideAsync(action.PrId, "fix", action.Id, default);
         await store.UndoAsync(default);
@@ -90,10 +92,11 @@ public sealed class ActionTests
     public async Task TearArchivesAppliedActionsAndDecisionsButPreservesQueuedAndFailedItems()
     {
         using var factory = new TangleFactory();
+        using var scope = factory.Services.CreateScope();
         using var client = factory.LocalClient();
         client.DefaultRequestHeaders.Authorization = new("Bearer", TangleFactory.Key);
-        var store = factory.Services.GetRequiredService<ActionStore>();
-        await Seed(store, factory.Services.GetRequiredService<SyncStore>());
+        var store = scope.ServiceProvider.GetRequiredService<ActionStore>();
+        await Seed(store, scope.ServiceProvider.GetRequiredService<SyncStore>());
         var applied = await store.QueueAsync("fixture/sandbox#1", "comment", "{}", default);
         await store.DecideAsync(applied.PrId, "fix", applied.Id, default);
         await store.ClaimAsync(applied.Id, default);
@@ -113,15 +116,16 @@ public sealed class ActionTests
         Assert.Equal("applied", (await store.GetAsync(applied.Id, default))!.Status);
         await store.DecideAsync(applied.PrId, "wait", null, default);
         Assert.Single(await store.DecisionsAsync(default));
-        Assert.Single(await factory.Services.GetRequiredService<SyncStore>().GetBoardAsync());
+        Assert.Single(await scope.ServiceProvider.GetRequiredService<SyncStore>().GetBoardAsync());
     }
     [Fact]
     public async Task TearCannotArchiveAnApplyingAction()
     {
         using var factory = new TangleFactory();
+        using var scope = factory.Services.CreateScope();
         using var client = factory.LocalClient();
-        var store = factory.Services.GetRequiredService<ActionStore>();
-        await Seed(store, factory.Services.GetRequiredService<SyncStore>());
+        var store = scope.ServiceProvider.GetRequiredService<ActionStore>();
+        await Seed(store, scope.ServiceProvider.GetRequiredService<SyncStore>());
         var action = await store.QueueAsync("fixture/sandbox#1", "comment", "{}", default);
         await store.ClaimAsync(action.Id, default);
         await Assert.ThrowsAsync<InvalidOperationException>(() => store.TearAsync(default));
@@ -131,10 +135,11 @@ public sealed class ActionTests
     public async Task DisabledApplyNeverCallsGitHub()
     {
         using var factory = new TangleFactory();
+        using var scope = factory.Services.CreateScope();
         using var client = factory.LocalClient();
         client.DefaultRequestHeaders.Authorization = new("Bearer", TangleFactory.Key);
-        var store = factory.Services.GetRequiredService<ActionStore>();
-        await Seed(store, factory.Services.GetRequiredService<SyncStore>());
+        var store = scope.ServiceProvider.GetRequiredService<ActionStore>();
+        await Seed(store, scope.ServiceProvider.GetRequiredService<SyncStore>());
         var action = await store.QueueAsync("fixture/sandbox#1", "close", "{}", default);
         Assert.Equal(HttpStatusCode.Forbidden, (await client.PostAsJsonAsync($"/api/actions/{action.Id}/apply", new { confirmed = true })).StatusCode);
         Assert.Equal("queued", (await store.GetAsync(action.Id, default))!.Status);

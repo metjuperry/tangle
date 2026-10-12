@@ -11,10 +11,12 @@ using Tangle.Core;
 
 namespace Tangle.GitHub;
 
-public sealed class GitHubTokens(IConfiguration configuration)
+public sealed class GitHubTokens(IConfiguration configuration, Func<bool>? localUser = null)
 {
     public async Task<string> GetAsync(string owner, CancellationToken ct)
     {
+        if (localUser is not null && !localUser())
+            throw new InvalidOperationException("GitHub access for this user requires GitHub sign-in. Local credentials cannot be used for another board.");
         var token = configuration[$"GitHub:Tokens:{owner}"] ?? configuration["GitHub:Token"];
         if (!string.IsNullOrWhiteSpace(token)) return token;
         using var process = new Process
