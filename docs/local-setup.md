@@ -38,7 +38,7 @@ Open `/settings`, add `TALXIS` as an Organization and `metjuperry` as a Personal
 
 `Auth:Mode=GitHub` uses the registered GitHub App browser flow. Follow
 [checkpoint M](checkpoints/M.md) for client ID/secret and exact callback setup.
-The first user-token sync and old-board import are G3/G4, not part of G2.
+User-token sync is available in G3; old-board import remains G4.
 `Auth:AllowedLogins` and optional `Auth:AllowedOrganizations` are server-side
 admission lists. Data Protection keys persist under `keys/` beside the configured
 database, or `Auth:KeyDirectory`; keep that folder private and backed up.

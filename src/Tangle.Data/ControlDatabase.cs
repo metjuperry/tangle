@@ -98,6 +98,33 @@ public sealed class ControlDatabase(string path)
             "SELECT access_token FROM user_token WHERE user_id=@id AND status='active'",
             new { id }, cancellationToken: ct));
     }
+    public async Task<UserToken?> TokenAsync(string id, CancellationToken ct)
+    {
+        await using var db = await OpenAsync(ct);
+        return await db.QuerySingleOrDefaultAsync<UserToken>(new CommandDefinition("""
+            SELECT access_token AS AccessToken,refresh_token AS RefreshToken,expires_at AS ExpiresAt,status AS Status
+            FROM user_token WHERE user_id=@id
+            """, new { id }, cancellationToken: ct));
+    }
+    public async Task<bool> RefreshTokenAsync(string id, string previous, string access, string refresh, DateTimeOffset expiry, CancellationToken ct)
+    {
+        await using var db = await OpenAsync(ct);
+        return await db.ExecuteAsync(new CommandDefinition("""
+            UPDATE user_token SET access_token=@access,refresh_token=@refresh,expires_at=@expiry,status='active'
+            WHERE user_id=@id AND access_token=@previous AND status='active'
+            """, new { id, previous, access, refresh, expiry = expiry.ToString("O") }, cancellationToken: ct)) == 1;
+    }
+    public async Task InvalidateTokenAsync(string id, string previous, CancellationToken ct)
+    {
+        await using var db = await OpenAsync(ct);
+        await db.ExecuteAsync(new CommandDefinition(
+            "UPDATE user_token SET status='invalid' WHERE user_id=@id AND access_token=@previous",
+            new { id, previous }, cancellationToken: ct));
+    }
+    public sealed record UserToken(string AccessToken, string? RefreshToken, string? ExpiresAt, string Status)
+    {
+        public UserToken() : this("", null, null, "") { }
+    }
     public async Task ImportKeysAsync(Database source, string userId, CancellationToken ct = default)
     {
         await using var old = await source.OpenAsync(ct);

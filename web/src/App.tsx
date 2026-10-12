@@ -14,7 +14,8 @@ import { Brand } from './theme/Brand'
 import { activeDecisionIds } from './deck/progress'
 import { ReceiptHistory } from './deck/ReceiptHistory'
 import { PersonalKeys } from './settings/PersonalKeys'
-import { Account } from './settings/Account'
+import { Account, type AccountInfo } from './settings/Account'
+import { ApplyAccess } from './settings/ApplyAccess'
 import { Evaluate } from './evaluate/Evaluate'
 import type { AiStatus } from './evaluate/AiCalls'
 const FeatureGuide = lazy(() => import('./help/FeatureGuide').then(module => ({ default: module.FeatureGuide })))
@@ -126,6 +127,7 @@ function SettingsPage() {
     <section className="settings-section" hidden={section !== 'safety'} aria-labelledby="apply-policy-heading"><h2 id="apply-policy-heading">GitHub Apply safety</h2>
       <p>{applyPolicy.data?.enabled ? `Apply is restricted to sandbox: ${applyPolicy.data.sandboxRepo ?? 'none configured'}.` : 'Apply is disabled. Queuing actions never posts them.'}</p>
       <p className="quiet">Set Apply:SandboxRepo and Apply:Enabled in Host user-secrets only after authorizing sandbox tests. Each action still needs its own confirmation.</p>
+      <ApplyAccess />
       {applyPolicy.error && <p role="alert">{applyPolicy.error.message}</p>}</section>
     <div hidden={section !== 'agents'}><PersonalKeys /></div>
     <section className="settings-section" hidden={section !== 'evaluation'} aria-labelledby="evaluate-settings-heading">
@@ -192,6 +194,8 @@ function Workspace() {
   const status = useLiveEvents()
   const authConfig = useQuery({ queryKey: ['auth-config'], queryFn: () => api<{ mode: string }>('/api/auth/config') })
   const githubMode = authConfig.data?.mode === 'GitHub'
+  const account = useQuery({ queryKey: ['account'], queryFn: () => api<AccountInfo>('/api/account'), enabled: githubMode })
+  const accessExpired = githubMode && account.data?.syncAvailable === false
   const dimOthers = useBoardUi(s => s.dimOthers)
   const toggleOthers = useBoardUi(s => s.toggleOthers)
   const selectCard = useBoardUi(s => s.select)
@@ -213,10 +217,10 @@ function Workspace() {
   })
   const mutate = sync.mutate
   useEffect(() => {
-    if (githubMode || authConfig.isPending || path !== '/' || !board.data || attemptedAutoSync.current) return
+    if (accessExpired || githubMode && !account.data || authConfig.isPending || path !== '/' || !board.data || attemptedAutoSync.current) return
     attemptedAutoSync.current = true
     if (!board.data.lastSyncAt || Date.now() - Date.parse(board.data.lastSyncAt) > 10 * 60 * 1000) mutate()
-  }, [board.data, path, mutate, githubMode, authConfig.isPending])
+  }, [board.data, path, mutate, githubMode, authConfig.isPending, accessExpired, account.data])
   const mine = board.data?.cards.filter(p => p.isMine).length ?? 0
   const others = (board.data?.cards.length ?? 0) - mine
   const decidedCount = activeDecisionIds(board.data?.cards ?? [], decisions.data ?? []).size
@@ -228,7 +232,7 @@ function Workspace() {
       title={others === 0 ? 'Every PR on this board is authored by you.' : 'Fade cards authored by other people, not cards waiting on a reviewer.'}>
       {others === 0 ? 'No others’ PRs to dim' : dimOthers ? 'Show others’ PRs' : 'Dim others’ PRs'}</button>
     {path === '/' && <button className="header-button" onClick={() => setCreatingSticky(true)}>New sticky</button>}
-    <button className="header-button" disabled={sync.isPending || githubMode} title={githubMode ? 'User-token sync arrives in G3.' : undefined} onClick={() => sync.mutate()}>{sync.isPending ? 'Syncing…' : 'Sync'}</button>
+    <button className="header-button" disabled={sync.isPending || accessExpired} onClick={() => sync.mutate()}>{sync.isPending ? 'Syncing…' : 'Sync'}</button>
     <button className="header-button" onClick={() => setShowHistory(true)}>History</button>
     <a className="header-button" href="/settings">Settings</a>
     <button className="header-button" onClick={() => setShowGuide(true)}>Help</button></header>
@@ -239,6 +243,7 @@ function Workspace() {
     {creatingSticky && <NewSticky onClose={() => setCreatingSticky(false)} />}
     {(status || sync.error) && <div className={`notice ${sync.error ? 'notice-error' : ''}`} role={sync.error ? 'alert' : 'status'}>{sync.error?.message ?? status}</div>}
     {navigationError && <div className="notice notice-error" role="alert">{navigationError}</div>}
+    {accessExpired && <div className="notice notice-error" role="alert">GitHub access expired, sign in again. <a href="/auth/github/login">Sign in with GitHub</a></div>}
     <div className="view-stage" aria-busy={switching}>
     {switching && <ViewLoading destination={destination} />}
     <Suspense fallback={<ViewLoading destination={destination} />}>

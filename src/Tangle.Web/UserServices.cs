@@ -10,9 +10,11 @@ public sealed class UserResources
     private readonly ConcurrentDictionary<string, EventHub> events = new(StringComparer.Ordinal);
     private readonly ConcurrentDictionary<string, SemaphoreSlim> sync = new(StringComparer.Ordinal);
     private readonly ConcurrentDictionary<string, SemaphoreSlim> replay = new(StringComparer.Ordinal);
+    private readonly ConcurrentDictionary<string, SemaphoreSlim> tokens = new(StringComparer.Ordinal);
     public EventHub Events(string id) => events.GetOrAdd(id, _ => new());
     public SemaphoreSlim Sync(string id) => sync.GetOrAdd(id, _ => new(1, 1));
     public SemaphoreSlim Replay(string id) => replay.GetOrAdd(id, _ => new(1, 1));
+    public SemaphoreSlim Tokens(string id) => tokens.GetOrAdd(id, _ => new(1, 1));
 }
 
 public static class UserServices

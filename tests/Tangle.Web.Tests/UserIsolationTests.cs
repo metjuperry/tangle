@@ -51,7 +51,7 @@ public sealed class UserIsolationTests
             var actions = scope.ServiceProvider.GetRequiredService<ActionStore>();
             await actions.QueueAsync("example/repo#1", "comment", "{\"text\":\"" + login + "\"}", default);
             Assert.Single(await actions.ListAsync(default));
-            await Assert.ThrowsAsync<InvalidOperationException>(() =>
+            await Assert.ThrowsAsync<GitHubAccessExpiredException>(() =>
                 scope.ServiceProvider.GetRequiredService<Tangle.GitHub.GitHubTokens>().GetAsync("example", default));
         }
         Assert.NotSame(databases.GetOpened("101"), databases.GetOpened("202"));

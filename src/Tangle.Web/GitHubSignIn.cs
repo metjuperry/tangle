@@ -51,13 +51,23 @@ public sealed class GitHubOAuthClient(HttpClient http, GitHubAppSettings setting
 {
     public async Task<GitHubAuthorization> ExchangeAsync(string code, string verifier, CancellationToken ct)
     {
-        using var request = new HttpRequestMessage(HttpMethod.Post, "https://github.com/login/oauth/access_token");
-        request.Headers.Accept.Add(new MediaTypeWithQualityHeaderValue("application/json"));
-        request.Content = new FormUrlEncodedContent(new Dictionary<string, string>
+        return await TokenAsync(new Dictionary<string, string>
         {
             ["client_id"] = settings.ClientId, ["client_secret"] = settings.ClientSecret,
             ["code"] = code, ["redirect_uri"] = settings.Callback(runtime), ["code_verifier"] = verifier
-        });
+        }, ct);
+    }
+    public Task<GitHubAuthorization> RefreshAsync(string refresh, CancellationToken ct) =>
+        TokenAsync(new Dictionary<string, string>
+        {
+            ["client_id"] = settings.ClientId, ["client_secret"] = settings.ClientSecret,
+            ["grant_type"] = "refresh_token", ["refresh_token"] = refresh
+        }, ct);
+    private async Task<GitHubAuthorization> TokenAsync(Dictionary<string, string> form, CancellationToken ct)
+    {
+        using var request = new HttpRequestMessage(HttpMethod.Post, "https://github.com/login/oauth/access_token");
+        request.Headers.Accept.Add(new MediaTypeWithQualityHeaderValue("application/json"));
+        request.Content = new FormUrlEncodedContent(form);
         using var response = await http.SendAsync(request, ct);
         if (!response.IsSuccessStatusCode) throw new InvalidOperationException("GitHub token exchange failed. Try signing in again.");
         using var json = await JsonDocument.ParseAsync(await response.Content.ReadAsStreamAsync(ct), cancellationToken: ct);
@@ -76,6 +86,7 @@ public sealed class GitHubOAuthClient(HttpClient http, GitHubAppSettings setting
         request.Headers.UserAgent.ParseAdd("Tangle/0.1");
         request.Headers.Accept.ParseAdd("application/vnd.github+json");
         using var response = await http.SendAsync(request, ct);
+        if (response.StatusCode == System.Net.HttpStatusCode.Unauthorized) throw new GitHubAccessExpiredException();
         if (!response.IsSuccessStatusCode)
             throw new InvalidOperationException(response.StatusCode is System.Net.HttpStatusCode.Forbidden or System.Net.HttpStatusCode.NotFound
                 ? "GitHub access is missing. Check the app installation and required permissions; organization admission requires Members read."

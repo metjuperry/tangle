@@ -20,6 +20,7 @@ public static class ActionEndpoints
         {
             try { return await next(context); }
             catch (ArgumentException e) { return Results.BadRequest(new { error = e.Message }); }
+            catch (GitHubAccessExpiredException e) { return Results.Json(new { error = e.Message }, statusCode: 409); }
             catch (InvalidOperationException e) { return Results.Conflict(new { error = e.Message }); }
         });
         api.MapGet("/actions", async (ActionStore store, CancellationToken ct) => Results.Ok(await store.ListAsync(ct)));
@@ -52,17 +53,25 @@ public static class ActionEndpoints
         });
         api.MapPost("/decisions/undo", async (ActionStore store, EventHub events, CancellationToken ct) =>
         { await store.UndoAsync(ct); events.Publish("action.changed", new { }); return Results.Ok(new { undone = true }); });
-        api.MapGet("/actions/policy", (IConfiguration config) => Results.Ok(new
-        { sandboxRepo = config["Apply:SandboxRepo"], enabled = config.GetValue<bool>("Apply:Enabled") }));
+        api.MapGet("/actions/policy", async (IConfiguration config, UserApplyPolicy policy, IUserContext user, ControlDatabase control, CancellationToken ct) =>
+        {
+            var access = user.UserId == "local" || (await control.TokenAsync(user.UserId, ct))?.Status == "active";
+            return Results.Ok(new { sandboxRepo = config["Apply:SandboxRepo"], enabled = access && config.GetValue<bool>("Apply:Enabled"),
+                repositories = await policy.RepositoriesAsync(ct), perUser = user.UserId != "local" });
+        });
+        api.MapPut("/actions/policy", async (ApplyRepositories input, UserApplyPolicy policy, CancellationToken ct) =>
+        { await policy.SaveAsync(input.Repositories, ct); return Results.Ok(new { saved = true }); });
         api.MapPost("/actions/{id}/apply", async (string id, ConfirmInput input, ActionStore store, IGitHubActions github,
-            IConfiguration config, EventHub events, ILogger<ActionStore> logger, CancellationToken ct) =>
+            IConfiguration config, EventHub events, ILogger<ActionStore> logger, UserApplyPolicy policy, IUserContext user,
+            UserGitHubTokens tokens, CancellationToken ct) =>
         {
             var action = await store.GetAsync(id, ct) ?? throw new ArgumentException("Action not found.");
             var separator = action.PrId.LastIndexOf('#');
             var repo = action.PrId[..separator]; var number = int.Parse(action.PrId[(separator + 1)..]);
             if (!input.Confirmed) throw new ArgumentException("Explicit confirmation is required.");
-            if (!config.GetValue<bool>("Apply:Enabled") || !string.Equals(repo, config["Apply:SandboxRepo"], StringComparison.OrdinalIgnoreCase))
+            if (!await policy.AllowedAsync(repo, ct))
                 return Results.Json(new { error = "Apply is disabled or this repo is not the configured sandbox." }, statusCode: 403);
+            if (user.UserId != "local") await tokens.GetAsync(ct);
             if (!await store.ClaimAsync(id, ct)) throw new InvalidOperationException("Only queued actions can be applied once.");
             events.Publish("action.changed", new { id });
             try
@@ -83,4 +92,5 @@ public static class ActionEndpoints
             }
         });
     }
+    public sealed record ApplyRepositories(string[] Repositories);
 }
