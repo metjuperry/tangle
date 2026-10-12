@@ -1,6 +1,7 @@
 # Checkpoint L — Per-user databases behind the local key
 
-2026-10-12. **G1 implemented. Stop before G2 / real GitHub sign-in.**
+2026-10-12. **Local-mode review accepted:** Metju reported it works just like
+it did yesterday. G2 / real GitHub sign-in has not started.
 
 ## Built
 
