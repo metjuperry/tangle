@@ -102,8 +102,8 @@ public sealed class SyncService(IGitHubReader github, ISyncStore store, TimeProv
                 var viewer = await github.GetViewerAsync(scope.Owner, ct);
                 var scopeKey = $"involves:{viewer} {scope.Filter}";
                 var cursor = await store.GetCursorAsync(scopeKey, ct);
-                var oldest = cursor is null ? await store.GetOldestOpenUpdateAsync(scope.Owner,
-                    scope.Filter.StartsWith("repo:", StringComparison.Ordinal) ? scope.Filter[5..] : null, ct) : null;
+                var oldest = await store.GetOldestOpenUpdateAsync(scope.Owner,
+                    scope.Filter.StartsWith("repo:", StringComparison.Ordinal) ? scope.Filter[5..] : null, ct);
                 var window = cursor is null ? "" : $" updated:>={DateTimeOffset.Parse(cursor).AddSeconds(-1):yyyy-MM-ddTHH:mm:ssZ}";
                 var excluded = string.Join("", settings.Repos.Where(r => !r.Watched &&
                     string.Equals(r.Id.Split('/')[0], scope.Owner, StringComparison.OrdinalIgnoreCase))
@@ -115,8 +115,10 @@ public sealed class SyncService(IGitHubReader github, ISyncStore store, TimeProv
                     var cursors = new HashSet<string>();
                     do
                     {
-                        var stateWindow = cursor is null && state == "closed"
-                            ? $" updated:>={DateTimeOffset.Parse(oldest!).AddSeconds(-1):yyyy-MM-ddTHH:mm:ssZ}" : window;
+                        var closedSince = oldest is null ? cursor : cursor is null ? oldest :
+                            DateTimeOffset.Parse(oldest) < DateTimeOffset.Parse(cursor) ? oldest : cursor;
+                        var stateWindow = state == "closed" && closedSince is not null
+                            ? $" updated:>={DateTimeOffset.Parse(closedSince).AddSeconds(-1):yyyy-MM-ddTHH:mm:ssZ}" : window;
                         var page = await github.SearchAsync(scope.Owner,
                             $"is:pr is:{state} involves:{viewer} archived:false {scope.Filter}{excluded}{stateWindow}", after, viewer, ct);
                         fetched += page.Prs.Count; calls += page.CallCount; cost += page.Cost;
