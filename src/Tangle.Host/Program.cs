@@ -11,12 +11,24 @@ var builder = WebApplication.CreateBuilder(args);
 builder.WebHost.UseUrls(builder.Configuration["Tangle:Address"] ?? new RuntimeSettings().Address);
 builder.Services.AddSingleton(services =>
 {
+    var auth = services.GetRequiredService<IConfiguration>().GetSection("Auth").Get<AuthenticationSettings>() ?? new();
+    auth.Validate();
+    return auth;
+});
+builder.Services.AddSingleton(services =>
+{
     var settings = services.GetRequiredService<IConfiguration>().GetSection("Tangle").Get<RuntimeSettings>() ?? new();
     if (!Uri.TryCreate(settings.Address, UriKind.Absolute, out var address)
-        || address.Scheme != "http" || address.Host != "127.0.0.1" || address.AbsolutePath != "/"
+        || address.Scheme is not ("http" or "https") || address.AbsolutePath != "/"
         || address.Query.Length != 0 || address.UserInfo.Length != 0)
-        throw new InvalidOperationException("Tangle:Address must be an http://127.0.0.1:<port> loopback address.");
-    if (settings.DevelopmentKey.Length < 32)
+        throw new InvalidOperationException("Tangle:Address must be an absolute HTTP(S) bind address without a path, query or credentials.");
+    if (address.Host != "127.0.0.1" && (settings.AllowedHosts.Length == 0 || settings.AllowedOrigins.Length == 0))
+        throw new InvalidOperationException("Non-default bind hosts require explicit Tangle:AllowedHosts and Tangle:AllowedOrigins.");
+    if (settings.AllowedHosts.Any(host => host.Contains('*') || host.Contains('/'))
+        || settings.AllowedOrigins.Any(origin => !Uri.TryCreate(origin, UriKind.Absolute, out var uri)
+            || uri.Scheme is not ("http" or "https") || origin != uri.GetLeftPart(UriPartial.Authority)))
+        throw new InvalidOperationException("Allowed hosts must be exact authorities and allowed origins exact HTTP(S) origins.");
+    if (services.GetRequiredService<AuthenticationSettings>().Mode == "Local" && settings.DevelopmentKey.Length < 32)
         throw new InvalidOperationException("Set Tangle:DevelopmentKey in user-secrets or Tangle__DevelopmentKey to at least 32 characters.");
     return settings;
 });

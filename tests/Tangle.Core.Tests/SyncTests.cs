@@ -7,6 +7,32 @@ namespace Tangle.Core.Tests;
 
 public sealed class SyncTests : IDisposable
 {
+    [Theory]
+    [InlineData("CLOSED")]
+    [InlineData("MERGED")]
+    public async Task ResetCursorFindsClosedCachedPrWithoutChangingAuthoredRows(string state)
+    {
+        await Initialize();
+        await store.SaveScopeAsync("involves:viewer org:example", [Pr()], "cursor", default);
+        var authored = new AuthoringStore(database, new FixedClock());
+        await authored.NoteAsync("pr:example/repo#1", "keep note", default);
+        await authored.PositionAsync("pr:example/repo#1", 42, 99, default);
+        var sticky = await authored.SaveStickyAsync(null, "Release", "blue", false, default);
+        var tie = await authored.TieAsync("pr:example/repo#1", $"sticky:{sticky.Id}", "keep label", default);
+        await store.SaveSettingsAsync((await store.GetSettingsAsync()) with { BotLogins = ["bot"], Repos = [] });
+        Assert.Null(await store.GetCursorAsync("involves:viewer org:example", default));
+        var fake = new FakeReader([Page([]), Page([Pr(state: state, hash: state)])]);
+        await new SyncService(fake, store, new FixedClock()).RunAsync(default);
+        Assert.Empty(await store.GetBoardAsync());
+        Assert.Contains("is:closed", fake.Requests[1].Query);
+        Assert.Contains("updated:>=2026-10-08T23:59:59Z", fake.Requests[1].Query);
+        var data = await authored.GetAsync();
+        Assert.Equal("keep note", Assert.Single(data.Notes).Text);
+        Assert.Equal(42, Assert.Single(data.Positions).X);
+        Assert.Equal(state == "MERGED" ? 1 : 0, Assert.Single(data.Stickies).Merged);
+        await using var db = await database.OpenAsync();
+        Assert.Equal("keep label", await db.ExecuteScalarAsync<string>("SELECT label FROM link WHERE id=@id", new { id = tie.Id }));
+    }
     private readonly string directory = Path.Combine(Path.GetTempPath(), $"tangle-sync-{Guid.NewGuid()}");
     private readonly Database database;
     private readonly SyncStore store;

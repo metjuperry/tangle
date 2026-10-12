@@ -42,7 +42,7 @@ export function Untangle({ board }: { board: Board }) {
   }, [decide])
   useEffect(() => {
     const listener = (event: KeyboardEvent) => {
-      if (event.target instanceof HTMLElement && (event.target.closest('input,textarea,select,button') || document.querySelector('dialog[open]'))) return
+      if (event.target instanceof HTMLElement && (event.target.closest('input,textarea,select,[contenteditable]:not([contenteditable="false"])') || document.querySelector('dialog[open]'))) return
       if (event.key.toLowerCase() === 'u') { event.preventDefault(); if (!undo.isPending) undo.mutate(); return }
       const choice = choices.find(c => c[2].toLowerCase() === event.key.toLowerCase())
       if (choice && card && !decide.isPending) { event.preventDefault(); choose(choice[0]) }

@@ -34,3 +34,16 @@ Run `gh auth login` if needed. The backend reads `gh auth token`; it never store
 Open `/settings`, add `TALXIS` as an Organization and `metjuperry` as a Personal account, then **Save settings**. Press **Sync** and open `/debug/prs`. Defaults are empty until you configure them. Owner scopes include PRs involving your authenticated GitHub account, not every open PR in an organization. AI cannot be enabled in M1.
 
 `POST /api/sync` returns fetched/changed/call/cost counts. Cost includes search and nested pagination calls; viewer lookup cost is logged separately. No automatic or scheduled sync is implemented in M1. The debug page includes cached closed PRs for inspection; `/api/board` and the Board page exclude them.
+# Configurable ingress (no deployment)
+
+`Auth:Mode` defaults to `Local`; the development key and existing personal-key
+routes remain unchanged. Non-default bind hosts require exact
+`Tangle:AllowedHosts` (including port where used) and `Tangle:AllowedOrigins`.
+Wildcards are not supported.
+
+`Auth:Mode=ContainerApps` accepts `X-MS-CLIENT-PRINCIPAL-NAME` only when the
+connection originates from an explicit `Auth:TrustedProxyAddresses` IP and the
+login is in `Auth:AllowedLogins`. Configure ingress to remove client-supplied
+identity headers and prohibit direct backend access. Never trust a principal
+header from arbitrary clients. Local mode ignores these headers; personal keys
+still exclusively protect MCP/session reporting. No Azure resources are created.

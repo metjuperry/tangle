@@ -71,6 +71,7 @@ public interface ISyncStore
     Task<WatchedSettings> GetSettingsAsync(CancellationToken ct = default);
     Task SaveSettingsAsync(WatchedSettings settings, CancellationToken ct = default);
     Task<string?> GetCursorAsync(string scope, CancellationToken ct);
+    Task<string?> GetOldestOpenUpdateAsync(string owner, string? repo, CancellationToken ct);
     Task<int> SaveScopeAsync(string scope, IReadOnlyList<PullRequest> prs, string cursor, CancellationToken ct);
 }
 public sealed record SyncResult(int Fetched, int Changed, int Calls, int Cost);
@@ -100,19 +101,23 @@ public sealed class SyncService(IGitHubReader github, ISyncStore store, TimeProv
                 var viewer = await github.GetViewerAsync(scope.Owner, ct);
                 var scopeKey = $"involves:{viewer} {scope.Filter}";
                 var cursor = await store.GetCursorAsync(scopeKey, ct);
+                var oldest = cursor is null ? await store.GetOldestOpenUpdateAsync(scope.Owner,
+                    scope.Filter.StartsWith("repo:", StringComparison.Ordinal) ? scope.Filter[5..] : null, ct) : null;
                 var window = cursor is null ? "" : $" updated:>={DateTimeOffset.Parse(cursor).AddSeconds(-1):yyyy-MM-ddTHH:mm:ssZ}";
                 var excluded = string.Join("", settings.Repos.Where(r => !r.Watched &&
                     string.Equals(r.Id.Split('/')[0], scope.Owner, StringComparison.OrdinalIgnoreCase))
                     .Select(r => $" -repo:{r.Id}"));
                 var prs = new Dictionary<string, PullRequest>(StringComparer.Ordinal);
-                foreach (var state in cursor is null ? new[] { "open" } : new[] { "open", "closed" })
+                foreach (var state in cursor is null && oldest is null ? new[] { "open" } : new[] { "open", "closed" })
                 {
                     string? after = null;
                     var cursors = new HashSet<string>();
                     do
                     {
+                        var stateWindow = cursor is null && state == "closed"
+                            ? $" updated:>={DateTimeOffset.Parse(oldest!).AddSeconds(-1):yyyy-MM-ddTHH:mm:ssZ}" : window;
                         var page = await github.SearchAsync(scope.Owner,
-                            $"is:pr is:{state} involves:{viewer} archived:false {scope.Filter}{excluded}{window}", after, viewer, ct);
+                            $"is:pr is:{state} involves:{viewer} archived:false {scope.Filter}{excluded}{stateWindow}", after, viewer, ct);
                         fetched += page.Prs.Count; calls += page.CallCount; cost += page.Cost;
                         events?.Publish("sync.progress", new { scope = scope.Filter, fetched, calls, cost });
                         foreach (var pr in page.Prs) prs[pr.Id] = pr;

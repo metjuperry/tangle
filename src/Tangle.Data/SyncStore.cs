@@ -63,6 +63,16 @@ public sealed partial class SyncStore(Database database, TimeProvider? clock = n
             "SELECT cursor FROM sync_state WHERE scope=@scope", new { scope }, cancellationToken: ct));
     }
 
+    public async Task<string?> GetOldestOpenUpdateAsync(string owner, string? repo, CancellationToken ct)
+    {
+        await using var db = await database.OpenAsync(ct);
+        return await db.ExecuteScalarAsync<string?>(new CommandDefinition("""
+            SELECT MIN(updated_at) FROM pr WHERE state='OPEN'
+              AND lower(substr(repo_id,1,instr(repo_id,'/')-1))=lower(@owner)
+              AND (@repo IS NULL OR lower(repo_id)=lower(@repo))
+            """, new { owner, repo }, cancellationToken: ct));
+    }
+
     public async Task<int> SaveScopeAsync(string scope, IReadOnlyList<PullRequest> prs, string cursor, CancellationToken ct)
     {
         await using var db = await database.OpenAsync(ct);

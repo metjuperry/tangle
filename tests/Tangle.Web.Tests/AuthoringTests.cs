@@ -4,11 +4,35 @@ using System.Text.Json.Nodes;
 using Microsoft.Extensions.DependencyInjection;
 using Tangle.Data;
 using Tangle.Core;
+using Dapper;
 
 namespace Tangle.Web.Tests;
 
 public sealed class AuthoringTests
 {
+    [Fact]
+    public async Task LabelEditsAndRepeatedDecisionsPreserveDecisionTime()
+    {
+        using var factory = new TangleFactory();
+        _ = factory.LocalClient();
+        var sync = factory.Services.GetRequiredService<SyncStore>();
+        await sync.SaveScopeAsync("scope", [new PullRequest() { Id = "example/repo#1", RepoId = "example/repo",
+            Number = 1, State = "OPEN", CreatedAt = "2026-10-01T00:00:00Z", UpdatedAt = "2026-10-09T00:00:00Z",
+            ContentHash = "fixture", HeadRef = "feature", BaseRef = "main", Viewer = "viewer" }], "now", default);
+        var store = factory.Services.GetRequiredService<AuthoringStore>();
+        var sticky = await store.SaveStickyAsync(null, "Release", "blue", false, default);
+        var link = await store.TieAsync("pr:example/repo#1", $"sticky:{sticky.Id}", null, default);
+        await using var db = await factory.Services.GetRequiredService<Database>().OpenAsync();
+        await db.ExecuteAsync("UPDATE link SET decided_at='original' WHERE id=@id", new { id = link.Id });
+        await store.ChangeLinkAsync(link.Id, null, "new label", default);
+        await store.ChangeLinkAsync(link.Id, "tied", null, default);
+        await store.TieAsync(link.ARef, link.BRef, "another label", default);
+        Assert.Equal("original", await db.ExecuteScalarAsync<string>("SELECT decided_at FROM link WHERE id=@id", new { id = link.Id }));
+        await store.ChangeLinkAsync(link.Id, "cut", null, default);
+        Assert.NotEqual("original", await db.ExecuteScalarAsync<string>("SELECT decided_at FROM link WHERE id=@id", new { id = link.Id }));
+        await store.ChangeLinkAsync(link.Id, "tied", null, default);
+        await Assert.ThrowsAsync<ArgumentException>(() => store.ChangeLinkAsync(link.Id, "suggested", null, default));
+    }
     [Fact]
     public async Task AuthoringRoundTripSurvivesSyncAndReportsStickyMergedProgress()
     {

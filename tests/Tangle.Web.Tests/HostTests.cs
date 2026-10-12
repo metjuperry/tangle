@@ -40,6 +40,55 @@ public sealed class TangleFactory : WebApplicationFactory<Program>
 public sealed class HostTests(TangleFactory factory) : IClassFixture<TangleFactory>
 {
     [Fact]
+    public async Task PrincipalHeadersCannotAuthenticateInLocalMode()
+    {
+        using var client = factory.LocalClient();
+        client.DefaultRequestHeaders.Add("X-MS-CLIENT-PRINCIPAL-NAME", "metjuperry");
+        Assert.Equal(HttpStatusCode.Unauthorized, (await client.GetAsync("/api/board")).StatusCode);
+    }
+
+    [Fact]
+    public async Task ContainerPrincipalRequiresTrustedIngressAndConfiguredLogin()
+    {
+        using var original = new TangleFactory();
+        using var hosted = original.WithWebHostBuilder(builder =>
+        {
+            builder.ConfigureAppConfiguration((_, config) => config.AddInMemoryCollection(new Dictionary<string, string?>
+            {
+                ["Auth:Mode"] = "ContainerApps", ["Auth:AllowedLogins:0"] = "allowed",
+                ["Auth:TrustedProxyAddresses:0"] = "192.0.2.1",
+                ["Tangle:AllowedHosts:0"] = "tangle.example",
+                ["Tangle:AllowedOrigins:0"] = "https://tangle.example"
+            }));
+            builder.ConfigureServices(services => services.AddTransient<IStartupFilter, TrustedIngressFilter>());
+        });
+        using var client = hosted.CreateClient(new() { BaseAddress = new Uri("https://tangle.example") });
+        client.DefaultRequestHeaders.Add("X-MS-CLIENT-PRINCIPAL-NAME", "allowed");
+        Assert.Equal(HttpStatusCode.Unauthorized, (await client.GetAsync("/api/auth")).StatusCode);
+        client.DefaultRequestHeaders.Add("X-Test-Trusted-Ingress", "true");
+        Assert.Equal(HttpStatusCode.OK, (await client.GetAsync("/api/auth")).StatusCode);
+        client.DefaultRequestHeaders.Remove("X-MS-CLIENT-PRINCIPAL-NAME");
+        client.DefaultRequestHeaders.Add("X-MS-CLIENT-PRINCIPAL-NAME", "denied");
+        Assert.Equal(HttpStatusCode.Unauthorized, (await client.GetAsync("/api/auth")).StatusCode);
+        Assert.Equal(HttpStatusCode.Forbidden, (await client.PostAsJsonAsync("/api/auth/login", new { key = TangleFactory.Key })).StatusCode);
+        client.DefaultRequestHeaders.Host = "evil.example";
+        Assert.Equal(HttpStatusCode.Forbidden, (await client.GetAsync("/healthz")).StatusCode);
+    }
+
+    private sealed class TrustedIngressFilter : IStartupFilter
+    {
+        public Action<Microsoft.AspNetCore.Builder.IApplicationBuilder> Configure(Action<Microsoft.AspNetCore.Builder.IApplicationBuilder> next) => app =>
+        {
+            app.Use(nextMiddleware => context =>
+            {
+                if (context.Request.Headers["X-Test-Trusted-Ingress"] == "true")
+                    context.Connection.RemoteIpAddress = System.Net.IPAddress.Parse("192.0.2.1");
+                return nextMiddleware(context);
+            });
+            next(app);
+        };
+    }
+    [Fact]
     public async Task ProbeAndEmbeddedShellAreAvailable()
     {
         using var client = factory.LocalClient();
