@@ -14,6 +14,7 @@ import { Brand } from './theme/Brand'
 import { activeDecisionIds } from './deck/progress'
 import { ReceiptHistory } from './deck/ReceiptHistory'
 import { PersonalKeys } from './settings/PersonalKeys'
+import { Account } from './settings/Account'
 import { Evaluate } from './evaluate/Evaluate'
 import type { AiStatus } from './evaluate/AiCalls'
 const FeatureGuide = lazy(() => import('./help/FeatureGuide').then(module => ({ default: module.FeatureGuide })))
@@ -33,6 +34,7 @@ const settingsSections = [
   { id: 'safety', label: 'GitHub Apply safety' },
   { id: 'agents', label: 'Agent personal keys' },
   { id: 'evaluation', label: 'Evaluation and AI history' },
+  { id: 'account', label: 'Account' },
 ] as const
 function currentSettingsSection() {
   return settingsSections.find(section => `#${section.id}` === window.location.hash)?.id ?? 'owners'
@@ -78,6 +80,7 @@ function SettingsPage() {
         {settingsSections.map(item => <option key={item.id} value={item.id}>{item.label}</option>)}
       </select></label>
     </nav><div className="settings-content" ref={content}>
+    <div hidden={section !== 'account'}><Account owners={value.owners} /></div>
     <section className="settings-section" hidden={section !== 'owners'} aria-labelledby="owners-heading"><h2 id="owners-heading">Watched owners</h2>
     <p>Organizations and personal accounts to search for PRs involving you. Disabling an owner pauses all its repos.</p>
     {value.owners.length === 0 && <p className="quiet">No owners added yet.</p>}
@@ -187,6 +190,8 @@ function Workspace() {
   const board = useQuery({ queryKey: ['board'], queryFn: () => api<Board>('/api/board') })
   const decisions = useQuery({ queryKey: ['decisions'], queryFn: () => api<Decision[]>('/api/decisions') })
   const status = useLiveEvents()
+  const authConfig = useQuery({ queryKey: ['auth-config'], queryFn: () => api<{ mode: string }>('/api/auth/config') })
+  const githubMode = authConfig.data?.mode === 'GitHub'
   const dimOthers = useBoardUi(s => s.dimOthers)
   const toggleOthers = useBoardUi(s => s.toggleOthers)
   const selectCard = useBoardUi(s => s.select)
@@ -208,10 +213,10 @@ function Workspace() {
   })
   const mutate = sync.mutate
   useEffect(() => {
-    if (path !== '/' || !board.data || attemptedAutoSync.current) return
+    if (githubMode || authConfig.isPending || path !== '/' || !board.data || attemptedAutoSync.current) return
     attemptedAutoSync.current = true
     if (!board.data.lastSyncAt || Date.now() - Date.parse(board.data.lastSyncAt) > 10 * 60 * 1000) mutate()
-  }, [board.data, path, mutate])
+  }, [board.data, path, mutate, githubMode, authConfig.isPending])
   const mine = board.data?.cards.filter(p => p.isMine).length ?? 0
   const others = (board.data?.cards.length ?? 0) - mine
   const decidedCount = activeDecisionIds(board.data?.cards ?? [], decisions.data ?? []).size
@@ -223,7 +228,7 @@ function Workspace() {
       title={others === 0 ? 'Every PR on this board is authored by you.' : 'Fade cards authored by other people, not cards waiting on a reviewer.'}>
       {others === 0 ? 'No others’ PRs to dim' : dimOthers ? 'Show others’ PRs' : 'Dim others’ PRs'}</button>
     {path === '/' && <button className="header-button" onClick={() => setCreatingSticky(true)}>New sticky</button>}
-    <button className="header-button" disabled={sync.isPending} onClick={() => sync.mutate()}>{sync.isPending ? 'Syncing…' : 'Sync'}</button>
+    <button className="header-button" disabled={sync.isPending || githubMode} title={githubMode ? 'User-token sync arrives in G3.' : undefined} onClick={() => sync.mutate()}>{sync.isPending ? 'Syncing…' : 'Sync'}</button>
     <button className="header-button" onClick={() => setShowHistory(true)}>History</button>
     <a className="header-button" href="/settings">Settings</a>
     <button className="header-button" onClick={() => setShowGuide(true)}>Help</button></header>
@@ -254,6 +259,11 @@ function Shell() {
   const [key, setKey] = useState('')
   const [error, setError] = useState('')
   const [unlocking, setUnlocking] = useState(false)
+  const authConfig = useQuery({ queryKey: ['auth-config'], queryFn: () => api<{ mode: string }>('/api/auth/config') })
+  const signInError = new URLSearchParams(window.location.search).get('signInError')
+  const githubError = signInError === 'denied' ? 'You are not on the sign-in list. Ask the Tangle administrator for access.'
+    : signInError === 'state' ? 'This sign-in expired or was already used. Start a new sign-in.'
+      : signInError ? 'GitHub sign-in failed. Check the app permissions, installation and expiring-token setting, then try again.' : ''
   useEffect(() => {
     void fetch('/api/auth').then(r => setAuthenticated(r.ok)).catch(() => setError('Unable to reach Tangle.'))
   }, [])
@@ -266,7 +276,8 @@ function Shell() {
       const response = await fetch('/api/auth/login', {
         method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ key }),
       })
-      if (!response.ok) { setError('Invalid development key.'); return }
+      if (!response.ok) { setError(response.status === 429 ? 'Too many sign-in attempts. Wait a minute and try again.'
+        : response.status === 401 ? 'Invalid development key.' : 'Unable to sign in. Check the server configuration.'); return }
       setKey(''); setError(''); setAuthenticated(true)
     } catch { setError('Unable to reach Tangle.') }
     finally { setUnlocking(false) }
@@ -279,15 +290,20 @@ function Shell() {
       <p className="login-eyebrow">Your board is locked</p>
       <h1 id="login-heading">Pull requests, untangled.</h1>
       <p className="login-intro">Pick up the thread. Open your board to see what needs you, what can wait and how it all connects.</p>
-      <form onSubmit={login} aria-busy={unlocking}>
+      {authConfig.error && <p className="login-error" role="alert">{authConfig.error.message}</p>}
+      {authConfig.isPending ? <p role="status">Checking sign-in mode…</p> : authConfig.data?.mode === 'GitHub' ? <>
+        {githubError && <p className="login-error" role="alert">{githubError}</p>}
+        <a className="github-sign-in" href="/auth/github/login">Sign in with GitHub</a>
+        <p className="login-key-help">Your board is private to your GitHub account. Only people on the sign-in list may enter.</p>
+      </> : authConfig.data?.mode === 'ContainerApps' ? <p role="alert">Sign in through the configured hosting gateway.</p> : authConfig.data?.mode === 'Local' ? <form onSubmit={login} aria-busy={unlocking}>
         <label htmlFor="development-key">Development key</label>
         <input id="development-key" type="password" value={key} onChange={e => setKey(e.target.value)} required autoComplete="current-password"
           aria-describedby={`login-key-help${error ? ' login-error' : ''}`} aria-invalid={error === 'Invalid development key.' || undefined} />
         <p id="login-key-help" className="login-key-help">Use the key configured for this Tangle instance in user-secrets or the environment.</p>
         {error && <p id="login-error" className="login-error" role="alert">{error}</p>}
         <button disabled={unlocking}>{unlocking ? 'Unlocking…' : 'Unlock Tangle'}</button>
-      </form>
-      <p className="login-footnote">Your key is not saved in browser storage. GitHub actions still need your confirmation.</p>
+      </form> : null}
+      <p className="login-footnote">Credentials stay on the server. GitHub actions still need your confirmation.</p>
     </section></main></>
 }
 export default function App() {

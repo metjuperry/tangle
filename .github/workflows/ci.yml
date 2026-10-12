@@ -24,6 +24,8 @@ jobs:
       - run: node docs/generate-guide.mjs --check
       - run: npx playwright install --with-deps chromium && npx playwright test
         working-directory: web
+      - run: npx playwright test --config playwright.oauth.config.ts
+        working-directory: web
       - uses: actions/upload-artifact@v4
         if: failure()
         with:

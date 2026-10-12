@@ -7,8 +7,10 @@ using Anthropic;
 using Tangle.Mcp;
 using Tangle.Sessions;
 using Tangle.Host;
+using Microsoft.AspNetCore.DataProtection;
 
 var builder = WebApplication.CreateBuilder(args);
+builder.Logging.AddFilter("Microsoft.AspNetCore.Hosting.Diagnostics", LogLevel.Warning);
 builder.WebHost.UseUrls(builder.Configuration["Tangle:Address"] ?? new RuntimeSettings().Address);
 builder.Services.AddSingleton(services =>
 {
@@ -34,6 +36,22 @@ builder.Services.AddSingleton(services =>
     return settings;
 });
 builder.Services.AddUserData();
+builder.Services.AddSingleton(s =>
+{
+    var settings = s.GetRequiredService<IConfiguration>().GetSection("GitHub:App").Get<GitHubAppSettings>() ?? new();
+    if (s.GetRequiredService<AuthenticationSettings>().Mode == "GitHub") settings.Validate(s.GetRequiredService<RuntimeSettings>());
+    return settings;
+});
+builder.Services.AddDataProtection().SetApplicationName("Tangle");
+builder.Services.AddOptions<Microsoft.AspNetCore.DataProtection.KeyManagement.KeyManagementOptions>()
+    .Configure<RuntimeSettings, IConfiguration>((options, runtime, config) =>
+    {
+        var path = config["Auth:KeyDirectory"] ?? Path.Combine(Path.GetDirectoryName(Path.GetFullPath(runtime.DatabasePath))!, "keys");
+        options.XmlRepository = new Microsoft.AspNetCore.DataProtection.Repositories.FileSystemXmlRepository(
+            new DirectoryInfo(path), Microsoft.Extensions.Logging.Abstractions.NullLoggerFactory.Instance);
+    });
+builder.Services.AddSingleton<OAuthAttempts>();
+builder.Services.AddHttpClient<GitHubOAuthClient>();
 builder.Services.AddLocalAuthentication();
 builder.Services.AddSingleton<TimeProvider>(TimeProvider.System);
 builder.Services.AddScoped<SyncStore>();
@@ -79,10 +97,16 @@ builder.Services.AddScoped(s => new SyncService(s.GetRequiredService<IGitHubRead
 var app = builder.Build();
 await app.Services.GetRequiredService<ControlDatabase>().MigrateAsync();
 await app.Services.GetRequiredService<ControlDatabase>().EnsureLocalAsync();
-await app.Services.GetRequiredService<UserDatabases>().OpenAsync("local");
-using (var scope = app.Services.CreateScope())
+if (app.Services.GetRequiredService<AuthenticationSettings>().Mode == "Local")
+{
+    await app.Services.GetRequiredService<UserDatabases>().OpenAsync("local");
+    using var scope = app.Services.CreateScope();
     await scope.ServiceProvider.GetRequiredService<SessionService>().MatchAsync(CancellationToken.None);
+}
+_ = app.Services.GetRequiredService<GitHubAppSettings>();
 app.UseLocalAuthentication(app.Services.GetRequiredService<RuntimeSettings>());
+app.MapGitHubSignIn();
+app.MapAccountEndpoints();
 app.MapGet("/healthz", () => Results.Ok(new { status = "ok" }));
 app.MapSyncEndpoints();
 app.MapAuthoringEndpoints();

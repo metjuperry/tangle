@@ -7,6 +7,8 @@ using Microsoft.AspNetCore.Builder;
 using Microsoft.AspNetCore.Http;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Configuration;
+using Microsoft.AspNetCore.RateLimiting;
+using System.Threading.RateLimiting;
 using Tangle.Core;
 using Tangle.Data;
 
@@ -16,7 +18,14 @@ public static class LocalAuthentication
 {
     public static void AddLocalAuthentication(this IServiceCollection services)
     {
-        services.AddAuthentication(CookieAuthenticationDefaults.AuthenticationScheme).AddCookie(options =>
+        services.AddAuthentication(options =>
+        {
+            options.DefaultScheme = "Tangle";
+        }).AddPolicyScheme("Tangle", "Tangle", options =>
+        {
+            options.ForwardDefaultSelector = context => context.RequestServices.GetRequiredService<AuthenticationSettings>().Mode == "GitHub"
+                ? GitHubSignIn.Scheme : CookieAuthenticationDefaults.AuthenticationScheme;
+        }).AddCookie(options =>
         {
             options.Cookie.Name = "tangle.local";
             options.Cookie.HttpOnly = true;
@@ -28,6 +37,41 @@ public static class LocalAuthentication
                 context.Response.StatusCode = StatusCodes.Status401Unauthorized;
                 return Task.CompletedTask;
             };
+        }).AddCookie(GitHubSignIn.Scheme, options =>
+        {
+            options.Cookie.Name = "tangle.session";
+            options.Cookie.HttpOnly = true;
+            options.Cookie.SameSite = SameSiteMode.Lax;
+            options.Cookie.SecurePolicy = CookieSecurePolicy.SameAsRequest;
+            options.ExpireTimeSpan = TimeSpan.FromHours(8);
+            options.SlidingExpiration = true;
+            options.Events.OnSigningIn = context =>
+            {
+                context.CookieOptions.Secure = context.Request.IsHttps ||
+                    !(Uri.TryCreate("http://" + context.Request.Host.Host, UriKind.Absolute, out var uri) && uri.IsLoopback);
+                return Task.CompletedTask;
+            };
+            options.Events.OnRedirectToLogin = context => { context.Response.StatusCode = 401; return Task.CompletedTask; };
+            options.Events.OnRedirectToAccessDenied = context => { context.Response.StatusCode = 403; return Task.CompletedTask; };
+            options.Events.OnValidatePrincipal = async context =>
+            {
+                var auth = context.HttpContext.RequestServices.GetRequiredService<AuthenticationSettings>();
+                var id = context.Principal?.FindFirstValue(ClaimTypes.NameIdentifier);
+                var expiry = context.Principal?.FindFirstValue(GitHubSignIn.AdmissionExpiryClaim);
+                if (id is null || !long.TryParse(expiry, out var admissionExpiry)
+                    || admissionExpiry <= context.HttpContext.RequestServices.GetRequiredService<TimeProvider>().GetUtcNow().ToUnixTimeSeconds()
+                    || !GitHubSignIn.Admitted(context.Principal!, auth)
+                    || !await context.HttpContext.RequestServices.GetRequiredService<ControlDatabase>().ActiveAsync(id, context.HttpContext.RequestAborted))
+                    context.RejectPrincipal();
+            };
+        });
+        services.AddRateLimiter(options =>
+        {
+            options.RejectionStatusCode = 429;
+            options.AddPolicy("auth", context => RateLimitPartition.GetFixedWindowLimiter(
+                context.Connection.RemoteIpAddress?.ToString() ?? "unknown", _ => new FixedWindowRateLimiterOptions
+                { PermitLimit = context.RequestServices.GetRequiredService<IConfiguration>().GetValue("Auth:RequestsPerMinute", 30),
+                    Window = TimeSpan.FromMinutes(1), QueueLimit = 0, AutoReplenishment = true }));
         });
         services.AddAuthorization();
     }
@@ -49,11 +93,13 @@ public static class LocalAuthentication
                 return;
             }
             context.Response.Headers.XContentTypeOptions = "nosniff";
+            context.Response.Headers["Referrer-Policy"] = "no-referrer";
             context.Response.Headers.ContentSecurityPolicy =
                 "default-src 'self'; style-src 'self' 'unsafe-inline'; img-src 'self' data:; frame-ancestors 'none'; base-uri 'none'; form-action 'self'";
             await next(context);
         });
         app.UseAuthentication();
+        app.UseRateLimiter();
         app.Use(async (context, next) =>
         {
             var bearer = context.Request.Headers.Authorization.ToString();
@@ -92,6 +138,7 @@ public static class LocalAuthentication
             {
                 var control = context.RequestServices.GetRequiredService<ControlDatabase>();
                 var id = personalRoute ? context.User.Identity.Name! : auth.Mode == "Local" ? "local" :
+                    auth.Mode == "GitHub" ? context.User.FindFirstValue(ClaimTypes.NameIdentifier) :
                     await control.FindLoginAsync(context.User.Identity.Name!, context.RequestAborted);
                 if (id is null || !await control.ActiveAsync(id, context.RequestAborted))
                 {
@@ -112,10 +159,10 @@ public static class LocalAuthentication
                 return Results.Json(new { error = "Invalid development key." }, statusCode: 401);
             await context.SignInAsync(CookieAuthenticationDefaults.AuthenticationScheme, Principal());
             return Results.NoContent();
-        });
+        }).RequireRateLimiting("auth");
         app.MapPost("/api/auth/logout", async (HttpContext context) =>
         {
-            await context.SignOutAsync();
+            await context.SignOutAsync(auth.Mode == "GitHub" ? GitHubSignIn.Scheme : CookieAuthenticationDefaults.AuthenticationScheme);
             return Results.NoContent();
         }).RequireAuthorization();
         app.MapGet("/api/auth", () => Results.Ok(new { authenticated = true })).RequireAuthorization();
