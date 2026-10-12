@@ -38,6 +38,8 @@ export function SidePanel({ board }: { board: Board }) {
     card ? <><div className="panel-meta"><b>{card.id}</b><span>by {card.author ?? 'unknown'}</span><span>open {card.facts?.ageDays} days</span></div>
       <h2>{card.title}</h2><div className="chips"><span className={`turn-chip turn-${card.facts?.turn}`}><i />{turnLabel(card.facts?.turn)}</span>
         {card.facts?.origin === 'agent' && <span className="turn-chip">Agent-authored</span>}</div>
+      <a className="open-pr-link" href={`https://github.com/${card.repoId.split('/').map(encodeURIComponent).join('/')}/pull/${card.number}`}
+        target="_blank" rel="noopener noreferrer" aria-label="Open PR on GitHub (opens in a new tab)">Open PR on GitHub <span aria-hidden="true">↗</span></a>
       <button onClick={() => startTie(`pr:${card.id}`)}>Tie a string</button>
       <button onClick={() => setQueueAction(true)}>Queue a GitHub action</button>
       {queueAction && <ActionComposer prId={card.id} onClose={() => setQueueAction(false)} />}

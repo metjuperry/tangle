@@ -50,6 +50,7 @@ test('tie by keyboard, label, note, cut and re-tie survive sync', async ({ page 
   await page.getByRole('button', { name: /example\/tools #197,/ }).focus()
   await page.keyboard.press('Enter')
   await page.getByLabel('Label the string').fill('November release')
+  await page.mouse.move(0, 0)
   await expect(page.getByRole('button', { name: 'Save label' })).toHaveCSS('background-color', 'rgb(31, 63, 138)')
   await expect(page.getByLabel('Label the string')).toHaveCSS('font-family', 'Caveat, cursive')
   await page.getByRole('button', { name: 'Save label' }).click()
