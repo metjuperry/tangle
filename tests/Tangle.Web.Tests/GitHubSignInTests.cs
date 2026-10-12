@@ -18,14 +18,21 @@ public sealed class FakeOAuthHandler : HttpMessageHandler
     public int Exchanges { get; private set; }
     public string? Verifier { get; private set; }
     public bool FailToken { get; set; }
+    public int Refreshes { get; private set; }
     protected override async Task<HttpResponseMessage> SendAsync(HttpRequestMessage request, CancellationToken ct)
     {
         if (request.RequestUri!.Host == "github.com" && request.RequestUri.AbsolutePath == "/login/oauth/access_token")
         {
             Exchanges++;
             var form = QueryHelpers.ParseQuery(await request.Content!.ReadAsStringAsync(ct));
-            Verifier = form["code_verifier"];
+            Verifier = form.TryGetValue("code_verifier", out var verifier) ? verifier.ToString() : null;
             if (FailToken) return Json(new { error = "bad_verification_code" });
+            if (form.TryGetValue("grant_type", out var grant) && grant == "refresh_token")
+            {
+                Refreshes++;
+                var owner = form["refresh_token"].ToString().Replace("refresh-", "");
+                return Json(new { access_token = "access-" + owner, refresh_token = "refresh-" + owner, expires_in = 28800 });
+            }
             return Json(new { access_token = "access-" + form["code"], refresh_token = "refresh-" + form["code"], expires_in = 28800 });
         }
         var token = request.Headers.Authorization?.Parameter ?? "";

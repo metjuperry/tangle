@@ -18,4 +18,6 @@ public sealed class AuthenticationSettings
         if (TrustedProxyAddresses.Any(address => !System.Net.IPAddress.TryParse(address, out _)))
             throw new InvalidOperationException("Auth:TrustedProxyAddresses must contain explicit IP addresses.");
     }
+
 }
+public sealed class GitHubAccessExpiredException() : InvalidOperationException("GitHub access expired, sign in again.");

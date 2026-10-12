@@ -1,6 +1,6 @@
 # Checkpoint M — GitHub sign-in
 
-2026-10-12. **G2 implemented; stop before G3.**
+2026-10-12. **Accepted:** Metju successfully signed in and requested G3.
 
 ## Built
 

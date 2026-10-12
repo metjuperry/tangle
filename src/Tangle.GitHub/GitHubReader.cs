@@ -11,10 +11,12 @@ using Tangle.Core;
 
 namespace Tangle.GitHub;
 
-public sealed class GitHubTokens(IConfiguration configuration, Func<bool>? localUser = null)
+public sealed class GitHubTokens(IConfiguration configuration, Func<bool>? localUser = null,
+    Func<CancellationToken, Task<string>>? userToken = null, Func<CancellationToken, Task>? invalidate = null)
 {
     public async Task<string> GetAsync(string owner, CancellationToken ct)
     {
+        if (userToken is not null && localUser is not null && !localUser()) return await userToken(ct);
         if (localUser is not null && !localUser())
             throw new InvalidOperationException("GitHub access for this user requires GitHub sign-in. Local credentials cannot be used for another board.");
         var token = configuration[$"GitHub:Tokens:{owner}"] ?? configuration["GitHub:Token"];
@@ -42,6 +44,17 @@ public sealed class GitHubTokens(IConfiguration configuration, Func<bool>? local
         if (process.ExitCode != 0 || token.Length == 0)
             throw new InvalidOperationException($"No GitHub credential for {owner}. Run gh auth login or set GitHub:Tokens:{owner} in user-secrets.");
         return token;
+    }
+    public async Task CheckResponseAsync(System.Net.HttpStatusCode status, string owner, CancellationToken ct)
+    {
+        if (userToken is null || localUser is null || localUser()) return;
+        if (status == System.Net.HttpStatusCode.Unauthorized)
+        {
+            if (invalidate is not null) await invalidate(CancellationToken.None);
+            throw new GitHubAccessExpiredException();
+        }
+        if (status is System.Net.HttpStatusCode.Forbidden or System.Net.HttpStatusCode.NotFound)
+            throw new InvalidOperationException($"GitHub access to {owner} is unavailable. Check that Tangle is installed on this owner and has the required permissions; no other token will be used.");
     }
 }
 
@@ -151,6 +164,7 @@ public sealed class GitHubReader(HttpClient http, GitHubTokens tokens, ILogger<G
         request.Headers.UserAgent.ParseAdd("Tangle/0.1");
         request.Content = JsonContent.Create(new { query, variables });
         using var response = await http.SendAsync(request, ct);
+        await tokens.CheckResponseAsync(response.StatusCode, owner, ct);
         if (!response.IsSuccessStatusCode)
             throw new InvalidOperationException($"GitHub returned HTTP {(int)response.StatusCode}. Check token access and rate limits.");
         var body = await response.Content.ReadFromJsonAsync<JsonNode>(cancellationToken: ct)

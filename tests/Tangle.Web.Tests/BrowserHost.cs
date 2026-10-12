@@ -76,6 +76,7 @@ public static class BrowserHost
             builder.ConfigureAppConfiguration((_, config) => config.AddInMemoryCollection(new Dictionary<string, string?>
             {
                 ["Tangle:DevelopmentKey"] = "tangle-browser-test-key-not-a-secret",
+                ["Auth:Mode"] = "Local",
                 ["Auth:RequestsPerMinute"] = "10000",
                 ["Ai:Enabled"] = "false",
                 ["Ai:JevEnabled"] = "false",

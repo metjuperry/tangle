@@ -19,6 +19,11 @@ export function useLiveEvents() {
       const data: { success: boolean } = JSON.parse((event as MessageEvent<string>).data)
       setStatus(data.success ? 'Board up to date.' : 'Sync failed. Cached board retained.')
       invalidate()
+      void client.invalidateQueries({ queryKey: ['account'] })
+    })
+    events.addEventListener('github.access', () => {
+      void client.invalidateQueries({ queryKey: ['account'] })
+      void client.invalidateQueries({ queryKey: ['apply-policy'] })
     })
     events.addEventListener('ai.budget', () => { setStatus('Monthly AI budget reached. No further provider calls.'); void client.invalidateQueries({ queryKey: ['ai'] }) })
     events.addEventListener('ai.error', event => {

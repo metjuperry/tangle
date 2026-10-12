@@ -52,6 +52,8 @@ builder.Services.AddOptions<Microsoft.AspNetCore.DataProtection.KeyManagement.Ke
     });
 builder.Services.AddSingleton<OAuthAttempts>();
 builder.Services.AddHttpClient<GitHubOAuthClient>();
+builder.Services.AddScoped<UserGitHubTokens>();
+builder.Services.AddScoped<UserApplyPolicy>();
 builder.Services.AddLocalAuthentication();
 builder.Services.AddSingleton<TimeProvider>(TimeProvider.System);
 builder.Services.AddScoped<SyncStore>();
@@ -88,7 +90,9 @@ builder.Services.AddHostedService(s => s.GetRequiredService<UserAiQueue>());
 builder.Services.AddScoped<IAiQueue, ScopedAiQueue>();
 builder.Services.AddScoped<ISyncStore>(services => services.GetRequiredService<SyncStore>());
 builder.Services.AddScoped(s => new GitHubTokens(s.GetRequiredService<IConfiguration>(),
-    () => s.GetRequiredService<IUserContext>().UserId == "local"));
+    () => s.GetRequiredService<IUserContext>().UserId == "local",
+    ct => s.GetRequiredService<UserGitHubTokens>().GetAsync(ct),
+    ct => s.GetRequiredService<UserGitHubTokens>().InvalidateAsync(ct)));
 builder.Services.AddHttpClient<IGitHubReader, GitHubReader>();
 builder.Services.AddHttpClient<IGitHubActions, GitHubActions>();
 builder.Services.AddScoped(s => new SyncService(s.GetRequiredService<IGitHubReader>(), s.GetRequiredService<ISyncStore>(),

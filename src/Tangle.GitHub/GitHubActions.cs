@@ -48,6 +48,7 @@ public sealed class GitHubActions(HttpClient http, GitHubTokens tokens) : IGitHu
         request.Headers.UserAgent.ParseAdd("Tangle/0.1");
         request.Content = JsonContent.Create(new { query, variables });
         using var response = await http.SendAsync(request, ct);
+        await tokens.CheckResponseAsync(response.StatusCode, repo.Split('/')[0], ct);
         if (!response.IsSuccessStatusCode) throw new HttpRequestException($"GitHub action returned HTTP {(int)response.StatusCode}. No automatic retry.");
         var body = await response.Content.ReadFromJsonAsync<JsonNode>(cancellationToken: ct) ?? throw new InvalidOperationException("Empty GitHub action response.");
         if (body["errors"] is JsonArray errors && errors.Count > 0)

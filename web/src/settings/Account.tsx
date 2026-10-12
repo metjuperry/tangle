@@ -1,7 +1,7 @@
 import { useMutation, useQuery } from '@tanstack/react-query'
 import { api } from '../api/client'
 
-type AccountInfo = { mode: string; login: string; name: string | null; tokenStatus: string; expiresAt: string | null; syncAvailable: boolean; installUrl: string }
+export type AccountInfo = { mode: string; login: string; name: string | null; tokenStatus: string; expiresAt: string | null; syncAvailable: boolean; installUrl: string }
 type Installation = { account: string; url: string }
 export function Account({ owners }: { owners: { id: string; watched: boolean }[] }) {
   const account = useQuery({ queryKey: ['account'], queryFn: () => api<AccountInfo>('/api/account') })
@@ -18,7 +18,7 @@ export function Account({ owners }: { owners: { id: string; watched: boolean }[]
       <p><b>{account.data.name ?? account.data.login}</b> · {account.data.login}</p>
       <p>{account.data.mode === 'GitHub' ? `GitHub access: ${account.data.tokenStatus}.` : 'Local development-key mode.'}</p>
       {account.data.expiresAt && <p className="quiet">Token expires {new Date(account.data.expiresAt).toLocaleString()}.</p>}
-      {!account.data.syncAvailable && <p className="provider-status">GitHub sign-in is ready. Sync and Apply with your user token arrive in G3; your local-mode board stays separate until the G4 import.</p>}
+      {!account.data.syncAvailable && <p className="provider-status">GitHub access expired, sign in again. Your cached board is retained.</p>}
       {account.data.mode === 'GitHub' && <>
         <a className="settings-evaluate-link" href="/auth/github/login">Sign in again</a>
         <h3>GitHub App installations</h3>
