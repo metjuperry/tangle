@@ -2,6 +2,31 @@ import { test, expect } from '../../web/node_modules/@playwright/test'
 import { actionResultLabel, actionResultUrl } from '../../web/src/deck/actionResult'
 import { activeDecisionIds } from '../../web/src/deck/progress'
 
+test('verdict shortcuts work with a verdict button focused', async ({ page }) => {
+  await page.emulateMedia({ reducedMotion: 'reduce' })
+  await page.goto('/untangle')
+  await page.getByLabel('Development key').fill('tangle-browser-test-key-not-a-secret')
+  await page.getByRole('button', { name: 'Unlock Tangle' }).click()
+  await page.getByRole('button', { name: 'Wait W', exact: true }).click()
+  await expect(page.getByRole('button', { name: /Undo last decision/ })).toBeVisible()
+  await page.getByRole('button', { name: /Undo last decision/ }).focus()
+  await page.keyboard.press('u')
+  await expect(page.getByRole('button', { name: /Undo last decision/ })).toHaveCount(0)
+  for (const key of ['m', 'f', 'p', 'x']) {
+    await page.getByRole('button', { name: 'Wait W', exact: true }).focus()
+    await page.keyboard.press(key)
+    await expect(page.getByRole('dialog')).toBeVisible()
+    await page.keyboard.press('Escape')
+  }
+  for (const key of ['w', 's']) {
+    await page.getByRole('button', { name: 'Wait W', exact: true }).focus()
+    await page.keyboard.press(key)
+    await expect(page.getByRole('button', { name: /Undo last decision/ })).toBeVisible()
+    await page.getByRole('button', { name: /Undo last decision/ }).focus()
+    await page.keyboard.press('u')
+    await expect(page.getByRole('button', { name: /Undo last decision/ })).toHaveCount(0)
+  }
+})
 test('progress counts only distinct decisions for current own PRs', () => {
   const cards = [{ id: 'open#1', isMine: true }, { id: 'other#1', isMine: false }]
   const decisions = [{ prId: 'open#1' }, { prId: 'open#1' }, { prId: 'closed#2' }, { prId: 'merged#3' }, { prId: 'other#1' }]

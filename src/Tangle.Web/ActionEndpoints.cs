@@ -73,12 +73,13 @@ public static class ActionEndpoints
                 await store.FinishAsync(id, true, result, CancellationToken.None);
                 events.Publish("action.changed", new { id }); return Results.Ok(new { applied = true, result });
             }
-            catch (Exception e) when (e is HttpRequestException or InvalidOperationException or OperationCanceledException)
+            catch (Exception e)
             {
                 logger.LogError(e, "Apply failed or outcome unknown; never retry automatically");
-                await store.FinishAsync(id, false, e.Message + " Check GitHub before queuing another attempt.", CancellationToken.None);
+                const string message = "Apply failed or its outcome is unknown. Check GitHub before queuing another attempt.";
+                await store.FinishAsync(id, false, message, CancellationToken.None);
                 events.Publish("action.changed", new { id });
-                return Results.Json(new { error = e.Message + " Check GitHub before retrying." }, statusCode: 502);
+                return Results.Json(new { error = message }, statusCode: 502);
             }
         });
     }

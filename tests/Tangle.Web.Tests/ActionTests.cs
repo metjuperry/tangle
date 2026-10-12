@@ -11,6 +11,32 @@ namespace Tangle.Web.Tests;
 
 public sealed class ActionTests
 {
+    [Fact]
+    public async Task MalformedClaimedPayloadIsRecordedAsFailedAndPublishesCompletion()
+    {
+        using var baseFactory = new TangleFactory();
+        using var factory = baseFactory.WithWebHostBuilder(builder =>
+        {
+            builder.ConfigureAppConfiguration((_, configuration) => configuration.AddInMemoryCollection(new Dictionary<string, string?>
+            { ["Apply:Enabled"] = "true", ["Apply:SandboxRepo"] = "fixture/sandbox" }));
+            builder.ConfigureServices(services => { services.RemoveAll<IGitHubActions>(); services.AddSingleton<IGitHubActions>(new FakeActions()); });
+        });
+        using var client = factory.CreateClient(new() { BaseAddress = new Uri("http://127.0.0.1:5202") });
+        client.DefaultRequestHeaders.Authorization = new("Bearer", TangleFactory.Key);
+        var store = factory.Services.GetRequiredService<ActionStore>();
+        await Seed(store, factory.Services.GetRequiredService<SyncStore>());
+        var action = await store.QueueAsync("fixture/sandbox#1", "comment", "{invalid", default);
+        Assert.Equal(HttpStatusCode.BadGateway, (await client.PostAsJsonAsync($"/api/actions/{action.Id}/apply", new { confirmed = true })).StatusCode);
+        Assert.Equal("failed", (await store.GetAsync(action.Id, default))!.Status);
+        using var timeout = new CancellationTokenSource(TimeSpan.FromSeconds(5));
+        await using var events = factory.Services.GetRequiredService<Tangle.Web.EventHub>().Subscribe(0, timeout.Token).GetAsyncEnumerator();
+        var count = 0;
+        while (count < 2)
+        {
+            Assert.True(await events.MoveNextAsync());
+            if (events.Current.EventType == "action.changed") count++;
+        }
+    }
     private static async Task Seed(ActionStore actions, SyncStore sync)
     {
         var pr = new PullRequest("fixture/sandbox#1", "fixture/sandbox", 1, "Fixture", "", "viewer", true, "OPEN", false,

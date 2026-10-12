@@ -28,7 +28,8 @@ public sealed class AuthoringStore(Database database, TimeProvider clock)
         await db.ExecuteAsync(new CommandDefinition("""
             INSERT INTO link(id,a_ref,b_ref,source,status,label,created_at,decided_at)
             VALUES(@id,@a,@b,'me','tied',@label,@now,@now)
-            ON CONFLICT(a_ref,b_ref) DO UPDATE SET source='me',status='tied',label=COALESCE(excluded.label,link.label),decided_at=excluded.decided_at
+            ON CONFLICT(a_ref,b_ref) DO UPDATE SET source='me',status='tied',label=COALESCE(excluded.label,link.label),
+              decided_at=CASE WHEN link.status='tied' THEN link.decided_at ELSE excluded.decided_at END
             """, new { id = Guid.NewGuid().ToString(), a, b, label, now = Now }, cancellationToken: ct));
         return await db.QuerySingleAsync<BoardString>(new CommandDefinition(LinkSelect + " WHERE a_ref=@a AND b_ref=@b",
             new { a, b }, cancellationToken: ct));
@@ -38,10 +39,19 @@ public sealed class AuthoringStore(Database database, TimeProvider clock)
     {
         await RequireRefAsync($"link:{id}", ct);
         await using var db = await database.OpenAsync(ct);
+        using var tx = db.BeginTransaction(deferred: false);
+        var current = await db.QuerySingleAsync<string>(new CommandDefinition("SELECT status FROM link WHERE id=@id",
+            new { id }, tx, cancellationToken: ct));
+        if (status is not null && status != current && !((current == "suggested" && status is "tied" or "cut")
+            || (current == "tied" && status == "cut") || (current == "cut" && status == "tied")))
+            throw new ArgumentException("Invalid string status transition.");
         await db.ExecuteAsync(new CommandDefinition("""
-            UPDATE link SET status=COALESCE(@status,status),label=COALESCE(@label,label),decided_at=@now WHERE id=@id
-            """, new { id, status, label, now = Now }, cancellationToken: ct));
-        return await db.QuerySingleAsync<BoardString>(new CommandDefinition(LinkSelect + " WHERE id=@id", new { id }, cancellationToken: ct));
+            UPDATE link SET decided_at=CASE WHEN @status IS NOT NULL AND @status<>status THEN @now ELSE decided_at END,
+              status=COALESCE(@status,status),label=COALESCE(@label,label) WHERE id=@id
+            """, new { id, status, label, now = Now }, tx, cancellationToken: ct));
+        var result = await db.QuerySingleAsync<BoardString>(new CommandDefinition(LinkSelect + " WHERE id=@id", new { id }, tx, cancellationToken: ct));
+        tx.Commit();
+        return result;
     }
     public async Task<Sticky> SaveStickyAsync(string? id, string title, string color, bool archived, CancellationToken ct)
     {
