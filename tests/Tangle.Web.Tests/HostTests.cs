@@ -20,6 +20,7 @@ public sealed class TangleFactory : WebApplicationFactory<Program>
             new Dictionary<string, string?>
             {
                 ["Tangle:DevelopmentKey"] = Key,
+                ["Auth:RequestsPerMinute"] = "10000",
                 ["Ai:Enabled"] = "false",
                 ["Ai:JevEnabled"] = "false",
                 ["Tangle:Address"] = "http://127.0.0.1:5202",

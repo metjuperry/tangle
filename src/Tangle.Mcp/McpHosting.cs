@@ -7,5 +7,5 @@ public static class McpHosting
 {
     public static void AddTangleMcp(this IServiceCollection services) =>
         services.AddMcpServer().WithHttpTransport(options => options.Stateless = true).WithTools<TangleTools>();
-    public static void MapTangleMcp(this WebApplication app) => app.MapMcp("/mcp").RequireAuthorization();
+    public static void MapTangleMcp(this WebApplication app) => app.MapMcp("/mcp").RequireAuthorization().RequireRateLimiting("auth");
 }

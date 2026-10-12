@@ -23,6 +23,12 @@ public static class BrowserHost
         using var factory = new BrowserFactory();
         factory.UseKestrel(5203);
         using var client = factory.CreateClient();
+        if (Environment.GetEnvironmentVariable("TANGLE_FAKE_OAUTH") == "true")
+        {
+            Console.WriteLine("Fake GitHub OAuth host ready; no external network calls.");
+            await Task.Delay(Timeout.InfiniteTimeSpan);
+            return;
+        }
         using var scope = factory.Services.CreateScope();
         var store = scope.ServiceProvider.GetRequiredService<SyncStore>();
         var fixture = File.ReadAllText(Path.Combine(AppContext.BaseDirectory, "fixtures", "github-pr-page.json"));
@@ -70,6 +76,7 @@ public static class BrowserHost
             builder.ConfigureAppConfiguration((_, config) => config.AddInMemoryCollection(new Dictionary<string, string?>
             {
                 ["Tangle:DevelopmentKey"] = "tangle-browser-test-key-not-a-secret",
+                ["Auth:RequestsPerMinute"] = "10000",
                 ["Ai:Enabled"] = "false",
                 ["Ai:JevEnabled"] = "false",
                 ["Tangle:Address"] = "http://127.0.0.1:5203",
@@ -81,6 +88,22 @@ public static class BrowserHost
                 services.AddSingleton<FixtureReader>();
                 services.AddSingleton<IGitHubReader>(s => s.GetRequiredService<FixtureReader>());
             });
+            if (Environment.GetEnvironmentVariable("TANGLE_FAKE_OAUTH") == "true")
+            {
+                builder.ConfigureAppConfiguration((_, config) => config.AddInMemoryCollection(new Dictionary<string, string?>
+                {
+                    ["Auth:Mode"] = "GitHub", ["Auth:AllowedLogins:0"] = "alice",
+                    ["GitHub:App:ClientId"] = "fake-client", ["GitHub:App:ClientSecret"] = "fake-secret",
+                    ["GitHub:App:CallbackUrl"] = "http://127.0.0.1:5203/auth/github/callback"
+                }));
+                builder.ConfigureServices(services =>
+                {
+                    services.RemoveAll<Tangle.Web.GitHubOAuthClient>();
+                    services.AddTransient(s => new Tangle.Web.GitHubOAuthClient(new HttpClient(new FakeOAuthHandler()),
+                        s.GetRequiredService<Tangle.Web.GitHubAppSettings>(), s.GetRequiredService<RuntimeSettings>(),
+                        s.GetRequiredService<TimeProvider>()));
+                });
+            }
         }
         protected override void Dispose(bool disposing)
         {

@@ -59,6 +59,45 @@ public sealed class ControlDatabase(string path)
             "SELECT id FROM user WHERE lower(login)=lower(@login) AND disabled=0 AND id<>'local'",
             new { login }, cancellationToken: ct));
     }
+    public async Task<bool> SaveGitHubUserAsync(long githubId, string login, string? name, string? avatar,
+        string access, string refresh, DateTimeOffset expiry, CancellationToken ct)
+    {
+        var id = githubId.ToString(System.Globalization.CultureInfo.InvariantCulture);
+        await using var db = await OpenAsync(ct);
+        using var tx = db.BeginTransaction(deferred: false);
+        var existing = await db.QuerySingleOrDefaultAsync<AccountInfo>(new CommandDefinition(
+            "SELECT id AS Id,login AS Login,name AS Name,avatar_url AS AvatarUrl,disabled AS Disabled FROM user WHERE id=@id",
+            new { id }, tx, cancellationToken: ct));
+        if (existing?.Disabled == true) throw new UnauthorizedAccessException("User is disabled.");
+        await db.ExecuteAsync(new CommandDefinition("""
+            INSERT INTO user(id,github_id,login,name,avatar_url,created_at,last_seen_at)
+            VALUES(@id,@githubId,@login,@name,@avatar,@now,@now)
+            ON CONFLICT(id) DO UPDATE SET login=excluded.login,name=excluded.name,avatar_url=excluded.avatar_url,last_seen_at=excluded.last_seen_at;
+            INSERT INTO user_token(user_id,access_token,refresh_token,expires_at,status)
+            VALUES(@id,@access,@refresh,@expiry,'active')
+            ON CONFLICT(user_id) DO UPDATE SET access_token=excluded.access_token,refresh_token=excluded.refresh_token,
+              expires_at=excluded.expires_at,status='active';
+            INSERT INTO user_ai(user_id) VALUES(@id) ON CONFLICT(user_id) DO NOTHING;
+            """, new { id, githubId, login, name, avatar, access, refresh, expiry = expiry.ToString("O"),
+                now = DateTimeOffset.UtcNow.ToString("O") }, tx, cancellationToken: ct));
+        tx.Commit();
+        return existing is null;
+    }
+    public async Task<AccountInfo?> AccountAsync(string id, CancellationToken ct)
+    {
+        await using var db = await OpenAsync(ct);
+        return await db.QuerySingleOrDefaultAsync<AccountInfo>(new CommandDefinition("""
+            SELECT u.id AS Id,u.login AS Login,u.name AS Name,u.avatar_url AS AvatarUrl,u.disabled AS Disabled,
+              t.status AS TokenStatus,t.expires_at AS ExpiresAt FROM user u LEFT JOIN user_token t ON t.user_id=u.id WHERE u.id=@id
+            """, new { id }, cancellationToken: ct));
+    }
+    public async Task<string?> EncryptedAccessAsync(string id, CancellationToken ct)
+    {
+        await using var db = await OpenAsync(ct);
+        return await db.QuerySingleOrDefaultAsync<string>(new CommandDefinition(
+            "SELECT access_token FROM user_token WHERE user_id=@id AND status='active'",
+            new { id }, cancellationToken: ct));
+    }
     public async Task ImportKeysAsync(Database source, string userId, CancellationToken ct = default)
     {
         await using var old = await source.OpenAsync(ct);
@@ -72,6 +111,12 @@ public sealed class ControlDatabase(string path)
                 VALUES(@Id,@userId,@Name,@Hash,@CreatedAt,@RevokedAt) ON CONFLICT(id) DO NOTHING
                 """, new { key.Id, userId, key.Name, key.Hash, key.CreatedAt, key.RevokedAt }, tx, cancellationToken: ct));
         tx.Commit();
+    }
+    public sealed record AccountInfo(string Id, string Login, string? Name, string? AvatarUrl, bool Disabled)
+    {
+        public AccountInfo() : this("", "", null, null, false) { }
+        public string? TokenStatus { get; init; }
+        public string? ExpiresAt { get; init; }
     }
     private sealed record LegacyKey(string Id, string Name, string Hash, string CreatedAt, string? RevokedAt);
 }

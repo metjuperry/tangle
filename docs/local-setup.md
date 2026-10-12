@@ -36,6 +36,13 @@ Open `/settings`, add `TALXIS` as an Organization and `metjuperry` as a Personal
 `POST /api/sync` returns fetched/changed/call/cost counts. Cost includes search and nested pagination calls; viewer lookup cost is logged separately. No automatic or scheduled sync is implemented in M1. The debug page includes cached closed PRs for inspection; `/api/board` and the Board page exclude them.
 # Configurable ingress (no deployment)
 
+`Auth:Mode=GitHub` uses the registered GitHub App browser flow. Follow
+[checkpoint M](checkpoints/M.md) for client ID/secret and exact callback setup.
+The first user-token sync and old-board import are G3/G4, not part of G2.
+`Auth:AllowedLogins` and optional `Auth:AllowedOrganizations` are server-side
+admission lists. Data Protection keys persist under `keys/` beside the configured
+database, or `Auth:KeyDirectory`; keep that folder private and backed up.
+
 `Auth:Mode` defaults to `Local`; the development key and existing personal-key
 routes remain unchanged. Non-default bind hosts require exact
 `Tangle:AllowedHosts` (including port where used) and `Tangle:AllowedOrigins`.

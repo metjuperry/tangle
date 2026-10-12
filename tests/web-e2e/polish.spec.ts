@@ -44,7 +44,7 @@ test('settings sitemap switches isolated sections without losing drafts and supp
   await page.getByLabel('Development key').fill('tangle-browser-test-key-not-a-secret')
   await page.getByRole('button', { name: 'Unlock Tangle' }).click()
   const nav = page.getByRole('navigation', { name: 'Settings sections' })
-  await expect(nav.getByRole('link')).toHaveCount(8)
+  await expect(nav.getByRole('link')).toHaveCount(9)
   await expect(nav.getByRole('link', { name: 'Watched owners', exact: true })).toHaveAttribute('aria-current', 'page')
   await expect(page.getByRole('region', { name: 'Repositories', exact: true })).toBeHidden()
   await page.getByLabel('Owner name', { exact: true }).fill('unsaved-owner')

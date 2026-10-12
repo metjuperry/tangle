@@ -26,7 +26,7 @@ public static class SessionEndpoints
         api.MapDelete("/keys/{id}", async (string id, PersonalKeys keys, CancellationToken ct) =>
         { await keys.RevokeAsync(id, ct); return Results.Ok(new { revoked = true }); });
         api.MapPost("/sessions", async (SessionReport report, SessionService sessions, CancellationToken ct) =>
-            Results.Ok(await sessions.ReportAsync(report, ct)));
+            Results.Ok(await sessions.ReportAsync(report, ct))).RequireRateLimiting("auth");
         api.MapGet("/sessions", async (SessionService sessions, CancellationToken ct) => Results.Ok(await sessions.ListAsync(ct)));
         api.MapPatch("/sessions/{id}", async (string id, Attach input, SessionService sessions, CancellationToken ct) =>
         { await sessions.AttachAsync(Uri.UnescapeDataString(id), input.PrId, ct); return Results.Ok(new { attached = true }); });

@@ -139,6 +139,7 @@ a { color: var(--yarn); }
 .login-paper button { width: 100%; min-height: 44px; margin: 4px 0 0; padding: 12px 16px; border: 1px solid var(--ink); border-radius: 5px; background: var(--ink); color: var(--paper); font-weight: 700; }
 .login-error { margin: 0; padding: 10px 12px; border-left: 3px solid var(--yarn); background: #b3262f0d; color: #7e1a21; font-size: 13px; line-height: 1.5; }
 .login-footnote { margin-top: 24px; padding-top: 16px; border-top: 1px dashed #cfc3ac; text-align: center; }
+.github-sign-in { display: block; margin: 16px 0; padding: 14px 20px; border-radius: 5px; background: var(--ink); color: var(--paper); text-align: center; font-weight: 700; text-decoration: none; }
 @media(max-width: 650px) { .login-wrap { padding: 32px 16px; }.login-paper { padding: 28px 24px; }.login-paper h1 { font-size: 27px; } }
 .settings-wrap:has(> .settings-page) { overflow: hidden; min-height: 0; }
 .settings-page { width: 100%; max-width: 1000px; height: 100%; min-height: 0; margin: 0 auto; padding: 0; border-radius: 6px; overflow: hidden; display: flex; flex-direction: column; }
