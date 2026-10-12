@@ -69,6 +69,7 @@ public sealed class SyncTests : IDisposable
         Assert.Equal(1, (await sync.RunAsync(default)).Changed);
         Assert.Contains("updated:>=2026-10-09T11:59:59Z", fake.Requests[2].Query);
         Assert.Contains("is:closed", fake.Requests[3].Query);
+        Assert.Contains("updated:>=2026-10-08T23:59:59Z", fake.Requests[3].Query);
         Assert.Single(await store.GetBoardAsync());
         Assert.Equal(2, (await store.GetBoardAsync(includeClosed: true)).Count);
     }
@@ -105,6 +106,24 @@ public sealed class SyncTests : IDisposable
         Assert.Equal("release", await db.ExecuteScalarAsync<string>("SELECT label FROM link WHERE id='tie'"));
         Assert.Equal("keep this", await db.ExecuteScalarAsync<string>("SELECT text FROM note"));
         Assert.Equal(42, await db.ExecuteScalarAsync<int>("SELECT x FROM position"));
+    }
+
+    [Fact]
+    public async Task NormalSyncRecoversClosureOlderThanAnAlreadyAdvancedCursor()
+    {
+        await Initialize();
+        await store.SaveScopeAsync("involves:viewer org:example", [Pr()], "2026-10-12T10:00:00Z", default);
+        var authored = new AuthoringStore(database, new FixedClock());
+        await authored.NoteAsync("pr:example/repo#1", "preserved note", default);
+        await authored.PositionAsync("pr:example/repo#1", 40, 90, default);
+        var fake = new FakeReader([Page([]), Page([Pr(state: "MERGED", hash: "merged")])]);
+        await new SyncService(fake, store, new FixedClock()).RunAsync(default);
+        Assert.Contains("updated:>=2026-10-12T09:59:59Z", fake.Requests[0].Query);
+        Assert.Contains("updated:>=2026-10-08T23:59:59Z", fake.Requests[1].Query);
+        Assert.Empty(await store.GetBoardAsync());
+        var data = await authored.GetAsync();
+        Assert.Equal("preserved note", Assert.Single(data.Notes).Text);
+        Assert.Equal(40, Assert.Single(data.Positions).X);
     }
 
     [Fact]
