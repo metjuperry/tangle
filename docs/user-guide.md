@@ -62,4 +62,4 @@ Settings generates an Agent personal key for Tangle; it is not an Anthropic or C
 
 Claude Code connects to the HTTP MCP endpoint with that key. It can read PR context and propose notes, strings, verdicts and queued actions. There is no Apply tool, and personal keys cannot access Apply or Settings.
 
-The SessionEnd hook sends repo, branch and local transcript-path metadata. Transcripts stay on your machine. A first-prompt excerpt is off by default. Sessions match by unique branch or Claude-Session trailer, and manual attachment wins. Session cards show a readable label; raw IDs are in details.
+The PostToolUse hook reports repo, branch and local transcript-path metadata after Bash gh pr create or the GitHub MCP create_pull_request tool. Unrelated tools are ignored; an exact custom tool name can be configured. Transcripts stay on your machine. A first-prompt excerpt is off by default. Sessions match by unique branch or Claude-Session trailer, and manual attachment wins. Session cards show a readable label; raw IDs are in details.

@@ -1,8 +1,10 @@
 import { execFileSync } from 'node:child_process'
 import { readFileSync } from 'node:fs'
+import { isPrCreation } from './pr-created.mjs'
 
 try {
   const input = JSON.parse(readFileSync(0, 'utf8'))
+  if (!isPrCreation(input, process.env.TANGLE_PR_CREATE_TOOL)) process.exit(0)
   const url = new URL(process.env.TANGLE_URL ?? 'http://127.0.0.1:5202')
   if (url.username || url.password || !['http:', 'https:'].includes(url.protocol) ||
       url.protocol === 'http:' && url.hostname !== '127.0.0.1') throw new Error('TANGLE_URL must use HTTPS or loopback HTTP.')

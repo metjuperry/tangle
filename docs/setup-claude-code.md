@@ -23,7 +23,7 @@ claude mcp add --transport http tangle "$TANGLE_URL/mcp" \
 The `claude mcp add` command stores connection credentials in Claude Code's user
 configuration; protect that file and revoke unused keys. Do not commit it.
 
-## SessionEnd hook
+## PostToolUse hook
 
 Requires Node.js 24 and Git on PATH on both platforms. The wrappers use the same
 Node implementation to parse JSON safely and avoid platform-specific payload
@@ -34,7 +34,8 @@ Add to your own `~/.claude/settings.json` without replacing existing hooks:
 ```json
 {
   "hooks": {
-    "SessionEnd": [{
+    "PostToolUse": [{
+      "matcher": "Bash|mcp__.*__create_pull_request",
       "hooks": [{
         "type": "command",
         "command": "/absolute/path/to/Tangle/hooks/tangle-session.sh"
@@ -46,8 +47,19 @@ Add to your own `~/.claude/settings.json` without replacing existing hooks:
 
 On Windows use `pwsh -File C:/absolute/path/to/Tangle/hooks/tangle-session.ps1`.
 Ensure the Claude Code process inherits `TANGLE_URL` and `TANGLE_PERSONAL_KEY`.
-The script reads SessionEnd JSON on stdin, finds the cwd's GitHub origin and
-current branch, and POSTs metadata. HTTP/parse/Git failures are explicit.
+The script reads PostToolUse JSON on stdin and reports only Bash commands that
+invoke `gh pr create`, or GitHub MCP tools with the exact action name
+`create_pull_request` (for example `mcp__github__create_pull_request`). Other
+events exit without reading credentials, Git metadata or transcripts.
+Commands such as `gh pr list` and quoted examples in `echo` are ignored.
+The matcher is a command-token filter, not a full shell interpreter; wrappers
+such as `bash -c` and dynamically constructed commands are not recognized.
+
+For a different GitHub API tool name, set `TANGLE_PR_CREATE_TOOL` to its exact
+Claude Code name and include it in the hook matcher. This overrides the default
+MCP name match; Bash `gh pr create` still triggers. The hook then finds the cwd's
+GitHub origin/current branch and POSTs metadata. HTTP/parse/Git failures are
+explicit. Remove the old SessionEnd registration to avoid redundant runs.
 
 First-prompt excerpts are **off**. To opt in, set
 `TANGLE_SESSION_EXCERPT=true`; the first user message is collapsed to a single
