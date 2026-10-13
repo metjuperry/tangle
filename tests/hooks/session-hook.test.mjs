@@ -5,6 +5,20 @@ import { spawn, execFileSync } from 'node:child_process'
 import { mkdtempSync, writeFileSync, rmSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join, resolve } from 'node:path'
+import { isPrCreation } from '../../hooks/pr-created.mjs'
+
+test('PostToolUse filters commands and exact GitHub PR-creation tool names', () => {
+  const bash = command => ({ hook_event_name: 'PostToolUse', tool_name: 'Bash', tool_input: { command } })
+  for (const command of ['gh pr create --title "Example"', 'cd repo && gh pr create', 'GH_TOKEN=test gh pr create'])
+    assert.equal(isPrCreation(bash(command)), true)
+  for (const command of ['gh pr list', 'echo "gh pr create"', "printf 'gh pr create'", 'gh api repos/example/repo/pulls', 'gh pr create-example'])
+    assert.equal(isPrCreation(bash(command)), false)
+  assert.equal(isPrCreation({ hook_event_name: 'SessionEnd', tool_name: 'Bash', tool_input: { command: 'gh pr create' } }), false)
+  assert.equal(isPrCreation({ hook_event_name: 'PostToolUse', tool_name: 'mcp__github__create_pull_request' }), true)
+  assert.equal(isPrCreation({ hook_event_name: 'PostToolUse', tool_name: 'mcp__github__list_pull_requests' }), false)
+  assert.equal(isPrCreation({ hook_event_name: 'PostToolUse', tool_name: 'custom-pr-create' }, 'custom-pr-create'), true)
+  assert.equal(isPrCreation({ hook_event_name: 'PostToolUse', tool_name: 'mcp__github__create_pull_request' }, 'custom-pr-create'), false)
+})
 
 for (const shell of ['bash', 'pwsh']) {
   test(`${shell} wrapper posts repo/branch metadata and respects excerpt opt-in`, async () => {
@@ -31,7 +45,8 @@ for (const shell of ['bash', 'pwsh']) {
           TANGLE_SESSION_EXCERPT: String(excerpt) } })
         let error = ''
         process.stderr.on('data', chunk => { error += chunk })
-        process.stdin.end(JSON.stringify({ session_id: 'hook-test', cwd: directory, transcript_path: transcript }))
+        process.stdin.end(JSON.stringify({ hook_event_name: 'PostToolUse', tool_name: 'Bash',
+          tool_input: { command: 'gh pr create --title "Fixture"' }, session_id: 'hook-test', cwd: directory, transcript_path: transcript }))
         const exit = await new Promise(resolve => process.on('close', resolve))
         assert.equal(exit, 0, error)
         const report = received.at(-1)
@@ -40,6 +55,14 @@ for (const shell of ['bash', 'pwsh']) {
         assert.equal(report.excerpt, excerpt ? 'First prompt continued' : undefined)
         assert.equal(report.transcriptPath, transcript)
       }
+
+      test('unrelated tool events skip credentials, Git and HTTP entirely', async () => {
+        const child = spawn('node', [resolve('hooks/tangle-session.mjs')], { env: { ...process.env, TANGLE_PERSONAL_KEY: '', TANGLE_URL: 'invalid' } })
+        let error = ''
+        child.stderr.on('data', chunk => { error += chunk })
+        child.stdin.end(JSON.stringify({ hook_event_name: 'PostToolUse', tool_name: 'Read', tool_input: {} }))
+        assert.equal(await new Promise(resolve => child.on('close', resolve)), 0, error)
+      })
     } finally {
       await new Promise(resolve => server.close(resolve))
       rmSync(directory, { recursive: true })
