@@ -146,8 +146,12 @@ public static class LocalAuthentication
                     await context.Response.WriteAsJsonAsync(new { error = "User is disabled or missing." });
                     return;
                 }
-                await context.RequestServices.GetRequiredService<UserDatabases>().OpenAsync(id, context.RequestAborted);
+                var databases = context.RequestServices.GetRequiredService<UserDatabases>();
+                using var lease = context.Request.Path == "/api/events" ? null : databases.Lease(id);
+                await databases.OpenAsync(id, context.RequestAborted);
                 context.RequestServices.GetRequiredService<UserContext>().Set(id, context.User.Identity.Name!);
+                await next(context);
+                return;
             }
             await next(context);
         });

@@ -23,6 +23,7 @@ public sealed class UserAiQueue(IServiceScopeFactory scopes, ILogger<UserAiQueue
             try
             {
                 using var scope = scopes.CreateScope();
+                using var lease = scope.ServiceProvider.GetRequiredService<UserDatabases>().Lease(id);
                 await scope.ServiceProvider.GetRequiredService<UserDatabases>().OpenAsync(id, ct);
                 scope.ServiceProvider.GetRequiredService<UserContext>().Set(id, id);
                 await scope.ServiceProvider.GetRequiredService<AiWorker>().RunAsync(ct);
@@ -32,7 +33,7 @@ public sealed class UserAiQueue(IServiceScopeFactory scopes, ILogger<UserAiQueue
         }
     }
 }
-public sealed class ScopedAiQueue(UserAiQueue queue, IUserContext user, IConfiguration config) : IAiQueue
+public sealed class ScopedAiQueue(UserAiQueue queue, IUserContext user, Tangle.Web.UserAiAccess access) : IAiQueue
 {
-    public void Enqueue() { if (config.GetValue<bool>("Ai:Enabled") && user.UserId == "local") queue.Enqueue(user.UserId); }
+    public void Enqueue() { if (access.Enabled) queue.Enqueue(user.UserId); }
 }

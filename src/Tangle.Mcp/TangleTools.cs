@@ -10,8 +10,15 @@ namespace Tangle.Mcp;
 
 [McpServerToolType]
 public sealed class TangleTools(SyncStore sync, SyncService synchronizer, AuthoringStore authoring,
-    ActionQueue actions, Database database, TimeProvider clock, ILiveEvents events, SessionService sessions, IEvaluationReports evaluation)
+    ActionQueue actions, Database database, TimeProvider clock, ILiveEvents events, SessionService sessions, IEvaluationReports evaluation,
+    IUserContext? user = null, ControlDatabase? control = null)
 {
+    private async Task RequireClaudeMode(CancellationToken ct)
+    {
+        if (user is not null && user.UserId != "local" && control is not null &&
+            (await control.AiAsync(user.UserId, ct)).Mode != "claude_code")
+            throw new InvalidOperationException("Choose My Claude Code in your AI access settings before recording AI proposals.");
+    }
     private async Task Fresh(CancellationToken ct)
     {
         var settings = await sync.GetSettingsAsync(ct);
@@ -82,6 +89,7 @@ public sealed class TangleTools(SyncStore sync, SyncService synchronizer, Author
     [McpServerTool(Name = "propose_link"), Description("Propose a dashed string with a reason for human tie/cut. Never overrides tied or cut pairs.")]
     public async Task<string> ProposeLink(string aRef, string bRef, string reason, CancellationToken ct)
     {
+        await RequireClaudeMode(ct);
         if (aRef == bRef || aRef.StartsWith("link:") || bRef.StartsWith("link:") ||
             string.IsNullOrWhiteSpace(reason) || reason.Length > 2000) throw new ArgumentException("Two different card refs and a reason are required.");
         await authoring.RequireRefAsync(aRef, ct); await authoring.RequireRefAsync(bRef, ct);
@@ -101,6 +109,7 @@ public sealed class TangleTools(SyncStore sync, SyncService synchronizer, Author
     [McpServerTool(Name = "record_verdict"), Description("Record a proposed verdict with a reason and confidence, not a GitHub action.")]
     public async Task<string> RecordVerdict(string prId, string action, double confidence, int priority, string reason, string intent, CancellationToken ct)
     {
+        await RequireClaudeMode(ct);
         if (!Enum.TryParse<NextAction>(action, true, out var parsed) || !Enum.IsDefined(parsed) ||
             !double.IsFinite(confidence) || confidence is < 0 or > 1 || priority is < 1 or > 5 ||
             string.IsNullOrWhiteSpace(reason) || reason.Length > 2000 || string.IsNullOrWhiteSpace(intent) || intent.Length > 4000)

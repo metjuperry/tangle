@@ -29,6 +29,49 @@ public sealed class UserDatabases(string directory, string localPath, ControlDat
     private sealed record Entry(Database Database, DateTimeOffset LastUsed);
     private readonly ConcurrentDictionary<string, Entry> opened = new(StringComparer.Ordinal);
     private readonly ConcurrentDictionary<string, SemaphoreSlim> gates = new(StringComparer.Ordinal);
+    private readonly object lifecycle = new();
+    private readonly Dictionary<string, int> active = new(StringComparer.Ordinal);
+    private readonly HashSet<string> deleting = new(StringComparer.Ordinal);
+    public IDisposable Lease(string id)
+    {
+        lock (lifecycle)
+        {
+            if (deleting.Contains(id)) throw new UnauthorizedAccessException("Account is being deleted.");
+            active[id] = active.GetValueOrDefault(id) + 1;
+            return new LeaseHandle(() => { lock (lifecycle) active[id]--; });
+        }
+    }
+    public async Task DeleteUserAsync(string id, CancellationToken ct)
+    {
+        Validate(id);
+        if (id == "local") throw new ArgumentException("Local data cannot be deleted.");
+        lock (lifecycle)
+        {
+            if (active.GetValueOrDefault(id) > 1) throw new InvalidOperationException("Another request or AI job is active. Wait before deleting.");
+            if (!deleting.Add(id)) throw new InvalidOperationException("Deletion is already running.");
+        }
+        try
+        {
+            await control.DisableAsync(id, true, ct);
+            opened.TryRemove(id, out _);
+            var path = Path.Combine(directory, id + ".db");
+            SqlitePoolClear();
+            foreach (var file in new[] { path, path + "-wal", path + "-shm" })
+                if (File.Exists(file)) File.Delete(file);
+            var backups = Path.Combine(Path.GetDirectoryName(directory)!, "backups");
+            if (Directory.Exists(backups))
+                foreach (var file in Directory.EnumerateFiles(backups, id + "-*.db"))
+                    File.Delete(file);
+            await control.DeleteAsync(id, ct);
+        }
+        finally { lock (lifecycle) deleting.Remove(id); }
+    }
+    private static void SqlitePoolClear() => Microsoft.Data.Sqlite.SqliteConnection.ClearAllPools();
+    private sealed class LeaseHandle(Action release) : IDisposable
+    {
+        private Action? action = release;
+        public void Dispose() => Interlocked.Exchange(ref action, null)?.Invoke();
+    }
     private static void Validate(string id)
     {
         if (id != "local" && (!long.TryParse(id, NumberStyles.None, CultureInfo.InvariantCulture, out var number) || number <= 0
@@ -43,6 +86,7 @@ public sealed class UserDatabases(string directory, string localPath, ControlDat
         await gate.WaitAsync(ct);
         try
         {
+            if (!await control.ActiveAsync(id, ct)) throw new UnauthorizedAccessException("User is disabled or missing.");
             var now = clock.GetUtcNow();
             if (opened.TryGetValue(id, out var entry))
             {

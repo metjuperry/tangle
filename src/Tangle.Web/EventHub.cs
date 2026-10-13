@@ -15,6 +15,14 @@ public sealed class EventHub : ILiveEvents
     private readonly Queue<LiveEvent> history = new();
     private readonly HashSet<Channel<LiveEvent>> subscribers = [];
     private long nextId;
+    public void Close()
+    {
+        lock (gate)
+        {
+            foreach (var subscriber in subscribers) subscriber.Writer.TryComplete();
+            history.Clear();
+        }
+    }
 
     public void Publish(string type, object data)
     {

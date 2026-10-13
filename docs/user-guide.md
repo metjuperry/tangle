@@ -54,7 +54,7 @@ Unchanged PRs and pairs reuse their last assessment across syncs and restarts. C
 
 Settings → Evaluation and AI history → Open Evaluate shows labelled-sample metrics, disagreement lists, a report and Recent AI calls. Viewing makes no provider calls. A fresh replay is explicitly confirmed, budgeted and limited to permitted original inputs. Fewer than 30 labels and missing old input snapshots are reported. Snooze is not scored as a verdict.
 
-Haiku is the default; Jev remains disabled until explicitly enabled on the server. Jev returns decisions rather than prose. Explain with Haiku is a separate paid request. Monthly budget limits further calls; unresolved usage remains conservatively reserved.
+GitHub users choose Off, My Claude Code, My Anthropic key or an admin-granted Company key in AI access. Own keys are encrypted; switching away removes the saved key. My Claude Code uses your personal MCP key and Claude plan without server provider calls. Company funding is hidden until explicitly enabled and granted. Server enablement, per-repo permission and monthly budgets still apply. Haiku is the default; Jev remains a Local-mode option unless explicitly enabled. Explain with Haiku is a separate paid request; unresolved usage remains conservatively reserved.
 
 ## Connect an agent
 

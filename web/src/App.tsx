@@ -16,6 +16,8 @@ import { ReceiptHistory } from './deck/ReceiptHistory'
 import { PersonalKeys } from './settings/PersonalKeys'
 import { Account, type AccountInfo } from './settings/Account'
 import { ApplyAccess } from './settings/ApplyAccess'
+import { AiModeSettings } from './settings/AiMode'
+import { AdminSettings } from './settings/Admin'
 import { Evaluate } from './evaluate/Evaluate'
 import type { AiStatus } from './evaluate/AiCalls'
 const FeatureGuide = lazy(() => import('./help/FeatureGuide').then(module => ({ default: module.FeatureGuide })))
@@ -108,6 +110,7 @@ function SettingsPage() {
       <label>Repository (owner/repo)<input value={repo} onChange={e => setRepo(e.target.value)} required /></label><button>Add repository</button>
     </form></section>
     <section className="settings-section" hidden={section !== 'privacy'} aria-labelledby="privacy-heading"><h2 id="privacy-heading">AI privacy and budget</h2>
+    <AiModeSettings />
     <p>Only explicitly allowed repos may send titles, descriptions, changed paths, review excerpts and linked labels to Anthropic. Never diffs or file contents. Check client policy first.</p>
     <p className={`provider-status ${aiStatus.data?.enabled ? 'provider-enabled' : ''}`}>{aiStatus.data?.enabled ? 'Provider calls enabled on the server.' : 'Provider calls disabled on the server. Set Ai:Enabled only when ready to authorize paid API usage.'}</p>
     <label className="budget-field">Monthly AI budget (USD)<input type="number" min="0" max="100" step="0.01" value={value.aiBudget ?? 1}
@@ -130,6 +133,7 @@ function SettingsPage() {
       <ApplyAccess />
       {applyPolicy.error && <p role="alert">{applyPolicy.error.message}</p>}</section>
     <div hidden={section !== 'agents'}><PersonalKeys /></div>
+    <div hidden={section !== 'account'}><AdminSettings /></div>
     <section className="settings-section" hidden={section !== 'evaluation'} aria-labelledby="evaluate-settings-heading">
     <h2 id="evaluate-settings-heading">Evaluation and AI history</h2>
     <p>Review suggestion quality, compare models and inspect recent AI calls without making provider requests.</p>
