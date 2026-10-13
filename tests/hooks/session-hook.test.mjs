@@ -60,13 +60,12 @@ for (const shell of ['bash', 'pwsh']) {
       await new Promise(resolve => server.close(resolve))
       rmSync(directory, { recursive: true })
     }
-
-    test('unrelated tool events skip credentials, Git and HTTP entirely', async () => {
-      const child = spawn('node', [resolve('hooks/tangle-session.mjs')], { env: { ...process.env, TANGLE_PERSONAL_KEY: '', TANGLE_URL: 'invalid' } })
-      let error = ''
-      child.stderr.on('data', chunk => { error += chunk })
-      child.stdin.end(JSON.stringify({ hook_event_name: 'PostToolUse', tool_name: 'Read', tool_input: {} }))
-      assert.equal(await new Promise(resolve => child.on('close', resolve)), 0, error)
-    })
   })
 }
+test('unrelated tool events skip credentials, Git and HTTP entirely', async () => {
+  const child = spawn('node', [resolve('hooks/tangle-session.mjs')], { env: { ...process.env, TANGLE_PERSONAL_KEY: '', TANGLE_URL: 'invalid' } })
+  let error = ''
+  child.stderr.on('data', chunk => { error += chunk })
+  child.stdin.end(JSON.stringify({ hook_event_name: 'PostToolUse', tool_name: 'Read', tool_input: {} }))
+  assert.equal(await new Promise(resolve => child.on('close', resolve)), 0, error)
+})
