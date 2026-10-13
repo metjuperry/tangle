@@ -20,7 +20,7 @@ public static partial class SyncEndpoints
     {
         var api = app.MapGroup("/api").RequireAuthorization();
         api.MapGet("/settings", async (ISyncStore store, CancellationToken ct) => Results.Ok(await store.GetSettingsAsync(ct)));
-        api.MapPut("/settings", async (WatchedSettings input, ISyncStore store, EventHub events, IConfiguration config, CancellationToken ct) =>
+        api.MapPut("/settings", async (WatchedSettings input, ISyncStore store, EventHub events, IConfiguration config, IUserContext user, CancellationToken ct) =>
         {
             if (input.Owners is null || input.Repos is null ||
                 input.BotLogins is null || input.BotLogins.Any(b => string.IsNullOrWhiteSpace(b) || b.Length > 100 || b.Any(char.IsWhiteSpace)) ||
@@ -35,6 +35,8 @@ public static partial class SyncEndpoints
                 return Results.BadRequest(new { error = "Verdicts/pairs support Haiku or Jev. Explanations require Haiku." });
             if ((input.AiVerdicts == "jev" || input.AiPairs == "jev") && !config.GetValue<bool>("Ai:JevEnabled"))
                 return Results.BadRequest(new { error = "Jev is disabled on the server. Enable it explicitly before selecting this provider." });
+            if (user.UserId != "local" && (input.AiVerdicts == "jev" || input.AiPairs == "jev"))
+                return Results.BadRequest(new { error = "Per-user provider modes currently use Anthropic; Jev remains Local-only." });
             await store.SaveSettingsAsync(input, ct);
             events.Publish("prs.changed", new { ids = Array.Empty<string>() });
             return Results.Ok(await store.GetSettingsAsync(ct));
@@ -49,9 +51,11 @@ public static partial class SyncEndpoints
                 return Results.Json(new { error = e.Message }, statusCode: StatusCodes.Status502BadGateway);
             }
         });
-        api.MapGet("/board", async (SyncStore store, AuthoringStore authoring, CancellationToken ct) =>
+        api.MapGet("/board", async (SyncStore store, AuthoringStore authoring, IUserContext user, ControlDatabase control, CancellationToken ct) =>
         {
             var cards = await store.GetBoardAsync(ct: ct);
+            if (user.UserId != "local" && (await control.AiAsync(user.UserId, ct)).Mode == "off")
+                cards = cards.Select(card => card with { Verdict = null }).ToArray();
             var own = await authoring.GetAsync(ct);
             return Results.Ok(new { zones = cards.Select(c => c.RepoId).Distinct(), cards,
                 batches = cards.Where(c => c.BatchId is not null).GroupBy(c => c.BatchId)
@@ -74,7 +78,7 @@ public static partial class SyncEndpoints
             context.Response.Headers["X-Accel-Buffering"] = "no";
             return Results.ServerSentEvents(events.Subscribe(value.Length == 0 ? null : long.Parse(value), context.RequestAborted));
         });
-        api.MapGet("/ai/status", async (Tangle.Data.Database database, Microsoft.Extensions.Configuration.IConfiguration config, IUserContext user, CancellationToken ct) =>
+        api.MapGet("/ai/status", async (Tangle.Data.Database database, Microsoft.Extensions.Configuration.IConfiguration config, IUserContext user, UserAiAccess access, CancellationToken ct) =>
         {
             await using var db = await database.OpenAsync(ct);
             var calls = await Dapper.SqlMapper.QueryAsync(db, new Dapper.CommandDefinition(
@@ -83,7 +87,7 @@ public static partial class SyncEndpoints
                   status,error,created_at AS createdAt,job,targets,outcome,pr_id AS prId,reserved_cost AS reservedCost
                 FROM ai_call ORDER BY created_at DESC LIMIT 50
                 """, cancellationToken: ct));
-            return Results.Ok(new { enabled = user.UserId == "local" && config.GetValue<bool>("Ai:Enabled"),
+            return Results.Ok(new { enabled = access.Enabled,
                 jevEnabled = user.UserId == "local" && config.GetValue<bool>("Ai:JevEnabled"), calls });
         });
     }

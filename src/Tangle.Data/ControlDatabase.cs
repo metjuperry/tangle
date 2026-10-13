@@ -3,7 +3,7 @@ using Microsoft.Data.Sqlite;
 
 namespace Tangle.Data;
 
-public sealed class ControlDatabase(string path)
+public sealed partial class ControlDatabase(string path)
 {
     public async Task<SqliteConnection> OpenAsync(CancellationToken ct = default)
     {
@@ -34,6 +34,15 @@ public sealed class ControlDatabase(string path)
                   anthropic_key TEXT,monthly_budget TEXT NOT NULL DEFAULT '1',company_granted INTEGER NOT NULL DEFAULT 0);
                 CREATE TABLE allowlist(kind TEXT NOT NULL,value TEXT NOT NULL,PRIMARY KEY(kind,value));
                 INSERT INTO control_migration VALUES('0001',strftime('%Y-%m-%dT%H:%M:%fZ','now'));
+                """, transaction: tx, cancellationToken: ct));
+        }
+        if (await db.ExecuteScalarAsync<int>(new CommandDefinition("SELECT COUNT(*) FROM control_migration WHERE name='0002'",
+            transaction: tx, cancellationToken: ct)) == 0)
+        {
+            await db.ExecuteAsync(new CommandDefinition("""
+                CREATE TABLE legacy_key_import(id TEXT PRIMARY KEY);
+                INSERT INTO legacy_key_import SELECT id FROM personal_key;
+                INSERT INTO control_migration VALUES('0002',strftime('%Y-%m-%dT%H:%M:%fZ','now'));
                 """, transaction: tx, cancellationToken: ct));
         }
         tx.Commit();
@@ -133,10 +142,16 @@ public sealed class ControlDatabase(string path)
         await using var db = await OpenAsync(ct);
         using var tx = db.BeginTransaction(deferred: false);
         foreach (var key in keys)
+        {
+            var imported = await db.ExecuteScalarAsync<int>(new CommandDefinition(
+                "SELECT COUNT(*) FROM legacy_key_import WHERE id=@id", new { id = key.Id }, tx, cancellationToken: ct));
+            if (imported != 0) continue;
             await db.ExecuteAsync(new CommandDefinition("""
                 INSERT INTO personal_key(id,user_id,name,key_hash,created_at,revoked_at)
-                VALUES(@Id,@userId,@Name,@Hash,@CreatedAt,@RevokedAt) ON CONFLICT(id) DO NOTHING
+                VALUES(@Id,@userId,@Name,@Hash,@CreatedAt,@RevokedAt) ON CONFLICT(id) DO NOTHING;
+                INSERT INTO legacy_key_import(id) VALUES(@Id);
                 """, new { key.Id, userId, key.Name, key.Hash, key.CreatedAt, key.RevokedAt }, tx, cancellationToken: ct));
+        }
         tx.Commit();
     }
     public sealed record AccountInfo(string Id, string Login, string? Name, string? AvatarUrl, bool Disabled)

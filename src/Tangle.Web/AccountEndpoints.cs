@@ -3,6 +3,7 @@ using Microsoft.AspNetCore.DataProtection;
 using Microsoft.AspNetCore.Http;
 using Tangle.Core;
 using Tangle.Data;
+using Microsoft.Extensions.Configuration;
 
 namespace Tangle.Web;
 
@@ -11,14 +12,15 @@ public static class AccountEndpoints
     public static void MapAccountEndpoints(this WebApplication app)
     {
         app.MapGet("/api/account", async (IUserContext user, ControlDatabase control, AuthenticationSettings auth,
-            TimeProvider clock, HttpContext context, CancellationToken ct) =>
+            TimeProvider clock, HttpContext context, IConfiguration config, CancellationToken ct) =>
         {
             context.Response.Headers.CacheControl = "no-store";
             var account = await control.AccountAsync(user.UserId, ct);
             if (account is null) return Results.NotFound(new { error = "Account not found." });
             var tokenStatus = account.TokenStatus ?? "none";
             if (tokenStatus == "active" && account.ExpiresAt is not null && DateTimeOffset.Parse(account.ExpiresAt) <= clock.GetUtcNow()) tokenStatus = "refresh-needed";
-            return Results.Ok(new { mode = auth.Mode, account.Login, account.Name, account.AvatarUrl, tokenStatus,
+            return Results.Ok(new { mode = auth.Mode, userId = user.UserId, account.Login, account.Name, account.AvatarUrl, tokenStatus,
+                isAdmin = user.UserId != "local" && user.Login == (config["Auth:AdminLogin"] ?? "metjuperry"),
                 account.ExpiresAt, syncAvailable = user.UserId == "local" || tokenStatus is "active" or "refresh-needed",
                 installUrl = "https://github.com/apps/tangle-metjuperry/installations/new" });
         }).RequireAuthorization();

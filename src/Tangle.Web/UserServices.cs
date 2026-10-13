@@ -15,6 +15,10 @@ public sealed class UserResources
     public SemaphoreSlim Sync(string id) => sync.GetOrAdd(id, _ => new(1, 1));
     public SemaphoreSlim Replay(string id) => replay.GetOrAdd(id, _ => new(1, 1));
     public SemaphoreSlim Tokens(string id) => tokens.GetOrAdd(id, _ => new(1, 1));
+    public void Remove(string id)
+    {
+        if (events.TryRemove(id, out var hub)) hub.Close();
+    }
 }
 
 public static class UserServices

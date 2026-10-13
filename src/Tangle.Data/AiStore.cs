@@ -4,11 +4,15 @@ using Tangle.Core;
 
 namespace Tangle.Data;
 
-public sealed class AiStore(Database database, SyncStore sync, AuthoringStore authoring, TimeProvider clock) : IAiStore
+public sealed class AiStore(Database database, SyncStore sync, AuthoringStore authoring, TimeProvider clock,
+    ControlDatabase? control = null, IUserContext? user = null) : IAiStore
 {
     public async Task<AiSnapshot> SnapshotAsync(CancellationToken ct)
     {
         var settings = await sync.GetSettingsAsync(ct);
+        if (control is not null && user?.UserId != "local" &&
+            (await control.AiAsync(user!.UserId, ct)).Mode is "off" or "claude_code")
+            return new([], [], [], (await control.AiAsync(user.UserId, ct)).MonthlyBudget);
         var cards = (await sync.GetBoardAsync(ct: ct)).Where(c => settings.Repos.Any(r => r.Id == c.RepoId && r.AiAllowed && r.Watched)).ToArray();
         var allowedRefs = cards.Select(c => $"pr:{c.Id}").ToHashSet();
         var own = await authoring.GetAsync(ct);
@@ -34,8 +38,10 @@ public sealed class AiStore(Database database, SyncStore sync, AuthoringStore au
                 context.Threads.Take(5).Select(t => Limit(t.Excerpt ?? "", 300)).ToArray(), linked) { UpdatedAt = card.UpdatedAt });
         }
         var budget = await db.QuerySingleAsync<string>(new CommandDefinition("SELECT value FROM app_setting WHERE key='ai_budget'", cancellationToken: ct));
+        var limit = control is not null && user?.UserId != "local" ? (await control.AiAsync(user!.UserId, ct)).MonthlyBudget :
+            decimal.Parse(budget, System.Globalization.CultureInfo.InvariantCulture);
         return new(contexts, own.Stickies.Select(s => new AiSticky($"sticky:{s.Id}", s.Title)).ToArray(),
-            strings.Select(s => new AiPair(s.ARef, s.BRef)).ToArray(), decimal.Parse(budget, System.Globalization.CultureInfo.InvariantCulture))
+            strings.Select(s => new AiPair(s.ARef, s.BRef)).ToArray(), limit)
         { VerdictDecider = settings.AiVerdicts, PairDecider = settings.AiPairs };
     }
     private static string Limit(string text, int length) => text.Length > length ? text[..length] : text;
@@ -56,6 +62,13 @@ public sealed class AiStore(Database database, SyncStore sync, AuthoringStore au
                 throw new InvalidOperationException("This AI work has already been attempted for the current PR state.");
         var budget = decimal.Parse(await db.QuerySingleAsync<string>(new CommandDefinition(
             "SELECT value FROM app_setting WHERE key='ai_budget'", transaction: tx, cancellationToken: ct)), System.Globalization.CultureInfo.InvariantCulture);
+        if (control is not null && user?.UserId != "local")
+        {
+            var account = await control.AiAsync(user!.UserId, ct);
+            if (account.Mode is not ("own_key" or "company")) throw new InvalidOperationException("Provider AI access is disabled for this user.");
+            if (account.Mode == "company" && !account.CompanyGranted) throw new InvalidOperationException("Company AI grant has been revoked.");
+            budget = account.MonthlyBudget;
+        }
         var month = clock.GetUtcNow().ToString("yyyy-MM");
         var used = await db.ExecuteScalarAsync<decimal>(new CommandDefinition("""
             SELECT COALESCE(SUM(CASE WHEN status='reserved' THEN reserved_cost ELSE cost END),0)

@@ -41,7 +41,10 @@ or Host user-secrets, never the database or browser.
 GitHub sign-in is available as an opt-in rollout; Local mode remains the default.
 See [checkpoint M](docs/checkpoints/M.md) for GitHub App configuration and the
 current boundary: GitHub-mode boards use their own user tokens for sync; the
-existing local board is imported separately in G4. See [checkpoint N](docs/checkpoints/N.md).
+existing local board can be imported with a backed-up command.
+See [import instructions](docs/checkpoints/O.md) and
+[AI/account administration](docs/checkpoints/P.md). Imports and account deletion
+are explicit actions, never automatic.
 
 Open **Help** in the toolbar for the feature explanation panel, or read the
 [user guide](docs/user-guide.md). Both use the same maintained feature text.

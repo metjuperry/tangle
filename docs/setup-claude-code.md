@@ -5,6 +5,12 @@ http://127.0.0.1:5202/settings using your development key.
 
 ## Personal key
 
+In GitHub mode, choose **My Claude Code** under Settings → AI privacy and budget
+before recording verdicts or proposing strings through MCP. Create the personal
+key in that same account; it resolves only that user's board. This mode uses
+your Claude plan, not Tangle's provider API. Own-key and company modes use
+separate encrypted API credentials and budgets.
+
 Create an **Agent personal key** with a descriptive name. Copy its value once;
 only its SHA-256 hash is stored in SQLite. Keep the value in your environment or
 secret manager, never source code. Settings can revoke it immediately.

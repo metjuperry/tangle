@@ -52,7 +52,7 @@ public sealed class FakeOAuthHandler : HttpMessageHandler
 
 public sealed class GitHubSignInTests
 {
-    private static Microsoft.AspNetCore.Mvc.Testing.WebApplicationFactory<Program> Configure(TangleFactory original, FakeOAuthHandler handler) =>
+    internal static Microsoft.AspNetCore.Mvc.Testing.WebApplicationFactory<Program> Configure(TangleFactory original, FakeOAuthHandler handler) =>
         original.WithWebHostBuilder(builder =>
         {
             builder.ConfigureAppConfiguration((_, config) => config.AddInMemoryCollection(new Dictionary<string, string?>
@@ -69,7 +69,7 @@ public sealed class GitHubSignInTests
                     s.GetRequiredService<Tangle.Core.RuntimeSettings>(), s.GetRequiredService<TimeProvider>()));
             });
         });
-    private static async Task<string> Start(HttpClient client)
+    internal static async Task<string> Start(HttpClient client)
     {
         var response = await client.GetAsync("/auth/github/login");
         Assert.Equal(HttpStatusCode.Redirect, response.StatusCode);

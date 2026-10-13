@@ -9,7 +9,15 @@ using Tangle.Sessions;
 using Tangle.Host;
 using Microsoft.AspNetCore.DataProtection;
 
-var builder = WebApplication.CreateBuilder(args);
+var importArguments = args.Contains("--import-local", StringComparer.Ordinal);
+var hostArguments = new List<string>();
+for (var i = 0; i < args.Length; i++)
+{
+    if (args[i] == "--import-local") continue;
+    if (args[i] is "--target-user" or "--confirm-login") { i++; continue; }
+    hostArguments.Add(args[i]);
+}
+var builder = WebApplication.CreateBuilder(hostArguments.ToArray());
 builder.Logging.AddFilter("Microsoft.AspNetCore.Hosting.Diagnostics", LogLevel.Warning);
 builder.WebHost.UseUrls(builder.Configuration["Tangle:Address"] ?? new RuntimeSettings().Address);
 builder.Services.AddSingleton(services =>
@@ -54,6 +62,7 @@ builder.Services.AddSingleton<OAuthAttempts>();
 builder.Services.AddHttpClient<GitHubOAuthClient>();
 builder.Services.AddScoped<UserGitHubTokens>();
 builder.Services.AddScoped<UserApplyPolicy>();
+builder.Services.AddScoped<UserAiAccess>();
 builder.Services.AddLocalAuthentication();
 builder.Services.AddSingleton<TimeProvider>(TimeProvider.System);
 builder.Services.AddScoped<SyncStore>();
@@ -72,18 +81,13 @@ builder.Services.AddScoped(s => new EvaluationRunner(s.GetRequiredService<IEvalu
     s.GetRequiredService<DeciderRegistry>(), s.GetRequiredService<UserResources>().Replay(s.GetRequiredService<IUserContext>().UserId)));
 builder.Services.AddScoped<IEvaluationReports>(s => s.GetRequiredService<EvaluationRunner>());
 builder.Services.AddSingleton(s => new JevDecider(new HttpClient(), s.GetRequiredService<IConfiguration>()["TYPESAFE_API_KEY"] ?? ""));
-builder.Services.AddSingleton(services =>
+builder.Services.AddScoped(services =>
 {
-    var configuration = services.GetRequiredService<IConfiguration>();
-    var key = configuration["ANTHROPIC_API_KEY"];
-    if (configuration.GetValue<bool>("Ai:Enabled") && string.IsNullOrWhiteSpace(key))
-        throw new InvalidOperationException("Ai:Enabled requires ANTHROPIC_API_KEY in environment or Host user-secrets.");
-    return new HaikuDecider(new AnthropicClient { ApiKey = key ?? "", MaxRetries = 0 });
+    return new HaikuDecider(new AnthropicClient { ApiKey = services.GetRequiredService<UserAiAccess>().Key, MaxRetries = 0 });
 });
 builder.Services.AddScoped(services => new AiWorker(services.GetRequiredService<IAiStore>(),
     services.GetRequiredService<HaikuDecider>(), services.GetRequiredService<ILiveEvents>(),
-    services.GetRequiredService<ILogger<AiWorker>>(), builder.Configuration.GetValue<bool>("Ai:Enabled")
-        && services.GetRequiredService<IUserContext>().UserId == "local",
+    services.GetRequiredService<ILogger<AiWorker>>(), services.GetRequiredService<UserAiAccess>().Enabled,
     services.GetRequiredService<DeciderRegistry>()));
 builder.Services.AddSingleton<UserAiQueue>();
 builder.Services.AddHostedService(s => s.GetRequiredService<UserAiQueue>());
@@ -99,8 +103,31 @@ builder.Services.AddScoped(s => new SyncService(s.GetRequiredService<IGitHubRead
     s.GetRequiredService<TimeProvider>(), s.GetRequiredService<ILiveEvents>(), s.GetRequiredService<IAiQueue>(),
     s.GetRequiredService<UserResources>().Sync(s.GetRequiredService<IUserContext>().UserId)));
 var app = builder.Build();
+var runtime = app.Services.GetRequiredService<RuntimeSettings>();
+var dataDirectory = Path.Combine(Path.GetDirectoryName(Path.GetFullPath(runtime.DatabasePath))!, "data");
+Directory.CreateDirectory(dataDirectory);
+using var hostLock = new FileStream(Path.Combine(dataDirectory, "host.lock"), FileMode.OpenOrCreate, FileAccess.ReadWrite, FileShare.None);
+if (importArguments)
+{
+    string Argument(string name) => Array.IndexOf(args, name) is var index && index >= 0 && index + 1 < args.Length
+        ? args[index + 1] : throw new ArgumentException($"Supply {name}.");
+    var backup = await LocalBoardImport.RunAsync(runtime.DatabasePath, Path.Combine(dataDirectory, "users"),
+        Argument("--target-user"), Argument("--confirm-login"), app.Services.GetRequiredService<ControlDatabase>());
+    app.Logger.LogInformation("Local board imported; source backup at {Path}. Original database preserved.", backup);
+    return;
+}
 await app.Services.GetRequiredService<ControlDatabase>().MigrateAsync();
 await app.Services.GetRequiredService<ControlDatabase>().EnsureLocalAsync();
+var authSettings = app.Services.GetRequiredService<AuthenticationSettings>();
+var controlDb = app.Services.GetRequiredService<ControlDatabase>();
+var savedLogins = await controlDb.AllowlistAsync("login", default);
+var savedOrgs = await controlDb.AllowlistAsync("org", default);
+if (savedLogins.Length + savedOrgs.Length > 0)
+{
+    authSettings.AllowedLogins = savedLogins;
+    authSettings.AllowedOrganizations = savedOrgs;
+}
+else await controlDb.SaveAllowlistAsync(authSettings.AllowedLogins, authSettings.AllowedOrganizations, default);
 if (app.Services.GetRequiredService<AuthenticationSettings>().Mode == "Local")
 {
     await app.Services.GetRequiredService<UserDatabases>().OpenAsync("local");
@@ -111,6 +138,7 @@ _ = app.Services.GetRequiredService<GitHubAppSettings>();
 app.UseLocalAuthentication(app.Services.GetRequiredService<RuntimeSettings>());
 app.MapGitHubSignIn();
 app.MapAccountEndpoints();
+app.MapAccountManagement();
 app.MapGet("/healthz", () => Results.Ok(new { status = "ok" }));
 app.MapSyncEndpoints();
 app.MapAuthoringEndpoints();
