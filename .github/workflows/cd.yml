@@ -1,0 +1,197 @@
+name: CD
+
+on:
+  workflow_dispatch:
+    inputs:
+      operation:
+        description: "Plan only, or request a protected apply"
+        type: choice
+        options: [plan, apply]
+        default: plan
+      deploy_application:
+        description: "Include Container App (requires verified cloud runtime)"
+        type: boolean
+        default: false
+      container_image:
+        description: "Verified public ghcr.io image pinned with @sha256 (app deployment only)"
+        type: string
+        default: ""
+
+permissions:
+  contents: read
+
+concurrency:
+  group: tangle-azure-production
+  cancel-in-progress: false
+
+env:
+  TF_IN_AUTOMATION: "true"
+  TF_INPUT: "false"
+  ARM_USE_OIDC: "true"
+  ARM_USE_AZUREAD: "true"
+  ARM_CLIENT_ID: ${{ vars.AZURE_CLIENT_ID }}
+  ARM_TENANT_ID: ${{ vars.AZURE_TENANT_ID }}
+  ARM_SUBSCRIPTION_ID: ${{ vars.AZURE_SUBSCRIPTION_ID }}
+  TF_VAR_subscription_id: ${{ vars.AZURE_SUBSCRIPTION_ID }}
+  TF_VAR_tenant_id: ${{ vars.AZURE_TENANT_ID }}
+  TF_VAR_provisioner_object_id: ${{ vars.AZURE_PROVISIONER_OBJECT_ID }}
+  TF_VAR_name_suffix: ${{ vars.TANGLE_AZURE_NAME_SUFFIX }}
+  TF_VAR_location: ${{ vars.TANGLE_AZURE_LOCATION || 'westeurope' }}
+  TF_VAR_budget_emails: ${{ vars.TANGLE_BUDGET_EMAILS_JSON }}
+  TF_VAR_budget_start_date: ${{ vars.TANGLE_BUDGET_START_DATE }}
+  TF_VAR_monthly_budget: ${{ vars.TANGLE_MONTHLY_BUDGET || '10' }}
+  TF_VAR_deploy_application: ${{ inputs.deploy_application }}
+  TF_VAR_cloud_runtime_verified: ${{ vars.TANGLE_CLOUD_RUNTIME_VERIFIED || 'false' }}
+  TF_VAR_container_image: ${{ inputs.container_image }}
+  TF_VAR_public_origin: ${{ vars.TANGLE_PUBLIC_ORIGIN }}
+  TF_VAR_github_client_id: ${{ vars.TANGLE_GITHUB_CLIENT_ID }}
+  TF_VAR_github_client_secret_uri: ${{ vars.TANGLE_GITHUB_SECRET_URI }}
+
+jobs:
+  plan:
+    if: github.ref == 'refs/heads/master'
+    runs-on: ubuntu-latest
+    environment: azure-plan
+    permissions:
+      contents: read
+      id-token: write
+      actions: read
+    steps:
+      - uses: actions/checkout@v4
+      - uses: hashicorp/setup-terraform@v3
+        with:
+          terraform_version: "1.9.8"
+      - name: Validate configuration
+        env:
+          STATE_ACCOUNT: ${{ vars.TF_STATE_ACCOUNT }}
+          STATE_CONTAINER: ${{ vars.TF_STATE_CONTAINER }}
+          STATE_GROUP: ${{ vars.TF_STATE_RESOURCE_GROUP }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          python3 - <<'PY'
+          import os, sys
+          names = ["ARM_CLIENT_ID", "ARM_TENANT_ID", "ARM_SUBSCRIPTION_ID",
+                   "TF_VAR_provisioner_object_id", "TF_VAR_name_suffix", "TF_VAR_budget_emails",
+                   "TF_VAR_budget_start_date", "STATE_ACCOUNT", "STATE_CONTAINER", "STATE_GROUP"]
+          missing = [name for name in names if not os.environ.get(name)]
+          if missing:
+              print("::error::Missing deployment configuration: " + ", ".join(missing))
+              sys.exit(1)
+          PY
+          if [[ "$TF_VAR_deploy_application" == "true" && "$TF_VAR_cloud_runtime_verified" != "true" ]]; then
+            echo "::error::Cloud restore/lease/replication and persistent key runtime must be verified before app deployment."
+            exit 1
+          fi
+          terraform -chdir=infra fmt -check -recursive
+      - name: Require successful CI for this commit
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          set -euo pipefail
+          gh api "repos/$GITHUB_REPOSITORY/actions/workflows/ci.yml/runs?head_sha=$GITHUB_SHA&per_page=20" \
+            --jq ".workflow_runs | any(.head_sha == \"$GITHUB_SHA\" and .event == \"push\" and .conclusion == \"success\")" | grep -qx true || {
+              echo "::error::Wait for successful CI on this exact master commit before deploying."
+              exit 1
+            }
+      - uses: azure/login@v2
+        with:
+          client-id: ${{ vars.AZURE_CLIENT_ID }}
+          tenant-id: ${{ vars.AZURE_TENANT_ID }}
+          subscription-id: ${{ vars.AZURE_SUBSCRIPTION_ID }}
+      - name: Initialize existing remote state
+        env:
+          STATE_ACCOUNT: ${{ vars.TF_STATE_ACCOUNT }}
+          STATE_CONTAINER: ${{ vars.TF_STATE_CONTAINER }}
+          STATE_GROUP: ${{ vars.TF_STATE_RESOURCE_GROUP }}
+        run: |
+          terraform -chdir=infra init -input=false -lockfile=readonly \
+            -backend-config="storage_account_name=$STATE_ACCOUNT" \
+            -backend-config="container_name=$STATE_CONTAINER" \
+            -backend-config="resource_group_name=$STATE_GROUP" \
+            -backend-config="key=tangle-production.tfstate" \
+            -backend-config="use_oidc=true" \
+            -backend-config="use_azuread_auth=true"
+          python3 - <<'PY'
+          import json, os
+          with open("infra/backend-review.json", "w") as file:
+              json.dump({name: os.environ[name] for name in
+                         ["STATE_ACCOUNT", "STATE_CONTAINER", "STATE_GROUP", "ARM_SUBSCRIPTION_ID", "ARM_TENANT_ID", "ARM_CLIENT_ID"]}, file)
+          PY
+      - run: terraform -chdir=infra validate
+      - name: Create deployment plan
+        run: terraform -chdir=infra plan -input=false -lock-timeout=5m -out=deployment.tfplan
+      - name: Summarize review
+        run: |
+          echo "## Tangle deployment plan" >> "$GITHUB_STEP_SUMMARY"
+          echo "Commit: \`$GITHUB_SHA\`" >> "$GITHUB_STEP_SUMMARY"
+          echo "Operation: \`${{ inputs.operation }}\`; include app: \`${{ inputs.deploy_application }}\`." >> "$GITHUB_STEP_SUMMARY"
+          echo "Review the Terraform plan in this job's log before approving production. Budget alerts are not spending caps." >> "$GITHUB_STEP_SUMMARY"
+      - uses: actions/upload-artifact@v4
+        with:
+          name: tangle-plan-${{ github.run_id }}
+          path: |
+            infra/deployment.tfplan
+            infra/backend-review.json
+          retention-days: 1
+          if-no-files-found: error
+
+  apply:
+    if: inputs.operation == 'apply' && github.ref == 'refs/heads/master'
+    needs: plan
+    runs-on: ubuntu-latest
+    environment: production
+    permissions:
+      contents: read
+      id-token: write
+      actions: read
+    steps:
+      - uses: actions/checkout@v4
+      - name: Require production reviewers
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          set -euo pipefail
+          gh api "repos/$GITHUB_REPOSITORY/environments/production" \
+            --jq 'any(.protection_rules[]; .type == "required_reviewers")' | grep -qx true || {
+              echo "::error::Configure required reviewers on the production environment before applying."
+              exit 1
+            }
+      - uses: hashicorp/setup-terraform@v3
+        with:
+          terraform_version: "1.9.8"
+      - uses: azure/login@v2
+        with:
+          client-id: ${{ vars.AZURE_CLIENT_ID }}
+          tenant-id: ${{ vars.AZURE_TENANT_ID }}
+          subscription-id: ${{ vars.AZURE_SUBSCRIPTION_ID }}
+      - uses: actions/download-artifact@v4
+        with:
+          name: tangle-plan-${{ github.run_id }}
+          path: infra
+      - name: Initialize the same remote state
+        env:
+          STATE_ACCOUNT: ${{ vars.TF_STATE_ACCOUNT }}
+          STATE_CONTAINER: ${{ vars.TF_STATE_CONTAINER }}
+          STATE_GROUP: ${{ vars.TF_STATE_RESOURCE_GROUP }}
+        run: |
+          python3 - <<'PY'
+          import json, os, sys
+          with open("infra/backend-review.json") as file:
+              expected = json.load(file)
+          if any(os.environ.get(name) != value for name, value in expected.items()):
+              print("::error::Production identity/backend differs from the reviewed plan.")
+              sys.exit(1)
+          PY
+          terraform -chdir=infra init -input=false -lockfile=readonly \
+            -backend-config="storage_account_name=$STATE_ACCOUNT" \
+            -backend-config="container_name=$STATE_CONTAINER" \
+            -backend-config="resource_group_name=$STATE_GROUP" \
+            -backend-config="key=tangle-production.tfstate" \
+            -backend-config="use_oidc=true" \
+            -backend-config="use_azuread_auth=true"
+      - name: Apply reviewed plan
+        run: terraform -chdir=infra apply -input=false -lock-timeout=5m deployment.tfplan
+      - name: Check deployed app
+        if: inputs.deploy_application
+        run: curl --fail --silent --show-error --retry 12 --retry-all-errors --retry-delay 10 --max-time 30 "$TF_VAR_public_origin/healthz"

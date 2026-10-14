@@ -71,6 +71,7 @@ Offline authentication is not bypassed.
 - [Claude Code MCP and session hook](docs/setup-claude-code.md)
 - [Evaluation and Jev setup](docs/checkpoints/H.md)
 - [Deployment deferred](docs/deployment-status.md)
+- [Manual CD setup](docs/deploy.md)
 - [Implementation checkpoints](docs/03-implementation-order.md)
 
 Azure deployment and a standalone demo dataset are deferred by choice. Normal

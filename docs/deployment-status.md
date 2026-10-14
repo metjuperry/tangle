@@ -6,3 +6,8 @@ polish. Terraform preparation was requested on 2026-10-14 and is available in
 Terraform apply, cloud secrets or deployment costs have been created.
 Resume M9 from `03-implementation-order.md` when hosting is
 needed, including SQLite single-writer lease, backup/restore and sign-in review.
+
+A manual OIDC-based CD workflow is now prepared; see `docs/deploy.md`.
+It has not been dispatched. Infrastructure plan/apply require user-configured
+remote state and protected GitHub environments; app deployment remains gated
+pending the missing durable cloud runtime.
