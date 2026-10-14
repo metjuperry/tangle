@@ -1,6 +1,20 @@
 name: CD
 
 on:
+  workflow_call:
+    inputs:
+      operation:
+        type: string
+        default: plan
+      deploy_application:
+        type: boolean
+        default: false
+      container_image:
+        type: string
+        default: ""
+      source_sha:
+        type: string
+        required: true
   workflow_dispatch:
     inputs:
       operation:
@@ -25,6 +39,7 @@ concurrency:
   cancel-in-progress: false
 
 env:
+  SOURCE_SHA: ${{ inputs.source_sha || github.sha }}
   TF_IN_AUTOMATION: "true"
   TF_INPUT: "false"
   ARM_USE_OIDC: "true"
@@ -49,7 +64,7 @@ env:
 
 jobs:
   plan:
-    if: github.ref == 'refs/heads/master'
+    if: github.ref == 'refs/heads/master' || github.event_name == 'release'
     runs-on: ubuntu-latest
     environment: azure-plan
     permissions:
@@ -58,6 +73,14 @@ jobs:
       actions: read
     steps:
       - uses: actions/checkout@v4
+        with:
+          ref: ${{ inputs.source_sha || github.sha }}
+          fetch-depth: 0
+      - name: Require code from master
+        run: |
+          set -euo pipefail
+          test "$(git rev-parse HEAD)" = "$SOURCE_SHA"
+          git merge-base --is-ancestor HEAD origin/master
       - uses: hashicorp/setup-terraform@v3
         with:
           terraform_version: "1.9.8"
@@ -89,8 +112,8 @@ jobs:
           GH_TOKEN: ${{ github.token }}
         run: |
           set -euo pipefail
-          gh api "repos/$GITHUB_REPOSITORY/actions/workflows/ci.yml/runs?head_sha=$GITHUB_SHA&per_page=20" \
-            --jq ".workflow_runs | any(.head_sha == \"$GITHUB_SHA\" and .event == \"push\" and .conclusion == \"success\")" | grep -qx true || {
+          gh api "repos/$GITHUB_REPOSITORY/actions/workflows/ci.yml/runs?head_sha=$SOURCE_SHA&per_page=20" \
+            --jq ".workflow_runs | any(.head_sha == \"$SOURCE_SHA\" and .event == \"push\" and .conclusion == \"success\")" | grep -qx true || {
               echo "::error::Wait for successful CI on this exact master commit before deploying."
               exit 1
             }
@@ -124,7 +147,7 @@ jobs:
       - name: Summarize review
         run: |
           echo "## Tangle deployment plan" >> "$GITHUB_STEP_SUMMARY"
-          echo "Commit: \`$GITHUB_SHA\`" >> "$GITHUB_STEP_SUMMARY"
+          echo "Commit: \`$SOURCE_SHA\`" >> "$GITHUB_STEP_SUMMARY"
           echo "Operation: \`${{ inputs.operation }}\`; include app: \`${{ inputs.deploy_application }}\`." >> "$GITHUB_STEP_SUMMARY"
           echo "Review the Terraform plan in this job's log before approving production. Budget alerts are not spending caps." >> "$GITHUB_STEP_SUMMARY"
       - uses: actions/upload-artifact@v4
@@ -137,7 +160,7 @@ jobs:
           if-no-files-found: error
 
   apply:
-    if: inputs.operation == 'apply' && github.ref == 'refs/heads/master'
+    if: inputs.operation == 'apply' && (github.ref == 'refs/heads/master' || github.event_name == 'release')
     needs: plan
     runs-on: ubuntu-latest
     environment: production
@@ -147,6 +170,8 @@ jobs:
       actions: read
     steps:
       - uses: actions/checkout@v4
+        with:
+          ref: ${{ inputs.source_sha || github.sha }}
       - name: Require production reviewers
         env:
           GH_TOKEN: ${{ github.token }}

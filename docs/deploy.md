@@ -1,13 +1,18 @@
 # Continuous deployment
 
-`.github/workflows/cd.yml` is a **manual** deployment workflow. Pushes and pull
-requests run CI only; they never apply infrastructure or deploy the app.
-This workflow has not been dispatched and no Azure resources have been created.
+`.github/workflows/release.yml` builds and publishes code when a stable GitHub
+release is **published**, then calls reusable CD to plan and request production
+deployment. Drafts and prereleases do not deploy production. Ordinary pushes and
+pull requests run CI only.
+
+`.github/workflows/cd.yml` also retains manual plan/apply dispatch for infrastructure
+or a supplied image. Neither release nor deployment has been triggered by the
+agent; no Azure resources have been created.
 
 ## What CD does
 
-1. Accepts only the default `master` branch and requires successful CI on that
-   exact commit.
+1. Accepts manual runs on `master` or calls from a published release. The resolved
+   source commit must belong to `master` and have successful CI.
 2. Signs in to Azure using OIDC, initializes existing remote Terraform state,
    validates and creates a saved plan.
 3. Defaults to `operation=plan`; no apply job runs in that mode.
@@ -24,7 +29,7 @@ planning rather than approving an expired artifact.
 ## One-time setup (you perform it)
 
 Create GitHub environments **`azure-plan`** and **`production`**. Restrict
-`production` to `master`, require reviewers, and prevent self-review/bypass where
+`production` to `master` and your release-tag pattern (for example `v*`), require reviewers, and prevent self-review/bypass where
 your GitHub plan allows it. The workflow refuses to apply without a
 required-reviewers protection rule.
 
@@ -83,16 +88,32 @@ and approve its protected production job.
 Budget alerts are notifications, not a spending cap. Planning needs Azure read
 access but does not create resources; applying can incur costs.
 
+## Release code automatically
+
+Publish a stable release whose tag points to a successfully tested commit on
+`master`. The release job checks ancestry/CI, builds `deploy/Dockerfile`, pushes
+version and source-SHA tags to GHCR, then passes **the resulting digest** to CD.
+There is no manually copied image tag and Terraform never uses `latest`.
+Production approval still follows the new Terraform plan.
+
+On the first publication, set the GHCR package visibility to **public** so Azure
+can pull it without registry credentials. Ensure package access grants this
+repository's `GITHUB_TOKEN` write permission. No separate registry token is needed.
+The same image may be rebuilt for later releases; the digest identifies what
+was actually built rather than assuming a version tag is immutable.
+
 ## Container image and durable runtime
 
-This CD workflow deploys an **existing verified image by digest**, rather than
-building an unsafe local-only image. The repository still lacks the cloud
+Release CD deploys the built image by digest; manual CD accepts a supplied
+digest. The repository still lacks the cloud
 entry point/Blob lease/restore/replication/persistent wrapped-key runtime
 described in `infra/README.md`. CI currently tests the application, not that
-missing cloud runtime. Therefore keep **include app=false** today.
+missing cloud runtime. Therefore keep manual **include app=false** today.
+Release image publication is implemented, but its deployment deliberately fails
+the runtime gate until that work is finished. Do not set the verification flag
+just to bypass the gate.
 
-When that runtime is implemented and verified, publish a public image to
-`ghcr.io` through a separately reviewed build/publish workflow. Then configure:
+When that runtime is implemented in the release Dockerfile and verified, configure:
 
 | Variable/input | Value |
 | --- | --- |
