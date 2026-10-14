@@ -14,7 +14,9 @@ not the superseded Container Apps principal-only login.
 | Optional Container App | Public HTTPS, Single revisions, 0–1 replicas, 0.25 CPU/0.5 GiB, ghcr.io digest-pinned image |
 | Monthly resource-group budget | Email alerts at 80% and 100%; **not a spending cap** |
 
-No Azure SQL, ACR, scheduled jobs or automatic deployment workflow is added.
+No Azure SQL, ACR, scheduled jobs or automatic deployment trigger is added.
+The manually dispatched [CD workflow](../docs/deploy.md) plans first and gates
+apply behind required production reviewers.
 Key Vault, Storage and compute can still incur charges; free grants are shared
 with the subscription, not guaranteed to cover this app.
 
