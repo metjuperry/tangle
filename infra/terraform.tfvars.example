@@ -1,0 +1,14 @@
+subscription_id        = "00000000-0000-0000-0000-000000000000"
+tenant_id              = "00000000-0000-0000-0000-000000000000"
+provisioner_object_id  = "00000000-0000-0000-0000-000000000000"
+name_suffix            = "change123"
+budget_start_date      = "2026-10-01T00:00:00Z"
+budget_emails          = ["you@example.com"]
+deploy_application     = false
+cloud_runtime_verified = false
+
+# Only after the cloud runtime, hostname and GitHub callback are ready:
+# container_image          = "ghcr.io/metjuperry/tangle@sha256:<digest>"
+# public_origin            = "tangle.example.com"
+# github_client_id         = "<GitHub App client ID>"
+# github_client_secret_uri = "https://tangle-change123.vault.azure.net/secrets/github-client-secret"
