@@ -14,3 +14,10 @@
 appsettings.*.local.json
 .DS_Store
 **/keys/
+**/.terraform/
+*.tfstate
+*.tfstate.*
+*.tfplan
+*.tfvars
+*.tfvars.json
+crash.log
